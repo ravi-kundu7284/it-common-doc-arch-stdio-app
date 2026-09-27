@@ -1,7 +1,12 @@
+import { getEnvVar } from "./env";
+
 // Universal Web Crypto API - 100% compatible with Edge Runtime, Node.js, and Cloudflare Pages
-const ENCRYPTION_SECRET =
-  process.env.ENCRYPTION_SECRET ||
-  "docarch-ai-super-secret-key-32-chars-min-length-required!!";
+const getEncryptionSecret = (): string => {
+  return (
+    getEnvVar("ENCRYPTION_SECRET") ||
+    "docarch-ai-super-secret-key-32-chars-min-length-required!!"
+  );
+};
 
 const buf2hex = (buf: ArrayBuffer): string => {
   return Array.from(new Uint8Array(buf))
@@ -36,9 +41,10 @@ function getCrypto(): Crypto {
 // Derive AES-GCM Key from secret using SHA-256
 async function getAesKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
+  const secret = getEncryptionSecret();
   const keyHash = await getCrypto().subtle.digest(
     "SHA-256",
-    enc.encode(ENCRYPTION_SECRET)
+    enc.encode(secret)
   );
   return getCrypto().subtle.importKey(
     "raw",

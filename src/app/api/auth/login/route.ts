@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbUpdateLastLogin, dbCreateSession } from "@/lib/supabase";
+import { dbFindUser, dbUpdateLastLogin, dbCreateSession, getLastDbError } from "@/lib/supabase";
 import { verifyPassword, createSessionToken } from "@/lib/crypto";
 import {
   getClientIp,
@@ -43,6 +43,16 @@ export async function POST(req: NextRequest) {
     // 2. User Lookup
     const user = await dbFindUser(identifier);
     if (!user) {
+      const dbErr = getLastDbError();
+      if (dbErr) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Database connection error: ${dbErr}. Check your Supabase configuration or visit /api/db/health.`,
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         { success: false, error: "Invalid username or password" },
         { status: 401 }

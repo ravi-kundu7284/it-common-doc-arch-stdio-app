@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbCreateUser, dbCreateSession } from "@/lib/supabase";
+import { dbFindUser, dbCreateUser, dbCreateSession, getLastDbError } from "@/lib/supabase";
 import { hashPassword, createSessionToken } from "@/lib/crypto";
 import { getClientIp } from "@/lib/rate-limit";
 
@@ -67,6 +67,17 @@ export async function POST(req: NextRequest) {
       designation: designation || "Software Architect",
       role: "architect",
     });
+
+    const dbErr = getLastDbError();
+    if (dbErr && !newUser.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Database connection error: ${dbErr}. Check your Supabase configuration or visit /api/db/health.`,
+        },
+        { status: 503 }
+      );
+    }
 
     const sessionToken = await createSessionToken({
       userId: newUser.id,
