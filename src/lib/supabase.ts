@@ -1,18 +1,43 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { isExpired } from "./crypto";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  "";
+/**
+ * Dynamic resolution of database connection parameters from Git environment variables,
+ * GitHub Secrets/Variables, or Cloudflare Pages environment.
+ */
+export function resolveSupabaseConfig(): { url: string; key: string } {
+  let url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    "";
+
+  let key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_KEY ||
+    "";
+
+  // If URL is not explicitly set, try extracting Supabase project ref from DATABASE_URL
+  // Example DATABASE_URL: postgresql://postgres.abcdefghijklmno:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+  if (!url && process.env.DATABASE_URL) {
+    const dbUrl = process.env.DATABASE_URL;
+    const match = dbUrl.match(/postgres\.([a-zA-Z0-9_-]+):/);
+    if (match && match[1]) {
+      url = `https://${match[1]}.supabase.co`;
+    }
+  }
+
+  return { url, key };
+}
 
 export const isSupabaseConfigured = (): boolean => {
+  const { url, key } = resolveSupabaseConfig();
   return Boolean(
-    supabaseUrl &&
-      supabaseKey &&
-      !supabaseUrl.includes("your-project-ref") &&
-      !supabaseKey.includes("your-key")
+    url &&
+      key &&
+      !url.includes("your-project-ref") &&
+      !key.includes("your-key")
   );
 };
 
@@ -23,7 +48,8 @@ export const getSupabaseClient = (): SupabaseClient | null => {
     return null;
   }
   if (!supabaseInstance) {
-    supabaseInstance = createClient(supabaseUrl, supabaseKey, {
+    const { url, key } = resolveSupabaseConfig();
+    supabaseInstance = createClient(url, key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
