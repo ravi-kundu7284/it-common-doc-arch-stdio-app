@@ -2,6 +2,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { isExpired } from "./crypto";
 import { getEnvVar } from "./env";
 
+// Polyfill WebSocket for Node.js 18 environments if missing
+if (typeof globalThis !== "undefined" && !globalThis.WebSocket) {
+  (globalThis as any).WebSocket = class DummyWebSocket {};
+}
+
 export { getEnvVar };
 
 let lastDbError: string | null = null;

@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages@1"
+    "pages:build": "npx @cloudflare/next-on-pages@1",
+    "db:test": "node scripts/test-db-connection.mjs",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
   },
   "dependencies": {
     "@ai-sdk/google": "^0.0.15",
