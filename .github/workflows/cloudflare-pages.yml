@@ -1,21 +1,15 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to Cloudflare Pages (Main Branch Only)
 
 on:
   push:
     branches:
       - main
-      - master
-      - feature/*
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 jobs:
   deploy-to-cloudflare:
     runs-on: ubuntu-latest
-    name: Build & Deploy to Cloudflare Pages
+    name: Build & Deploy to Cloudflare Pages (Production)
     permissions:
       contents: read
       deployments: write
@@ -44,4 +38,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .vercel/output/static --project-name=docarch-ai --commit-dirty=true
+          command: pages deploy .vercel/output/static --project-name=docarch-ai --branch=main --commit-dirty=true
