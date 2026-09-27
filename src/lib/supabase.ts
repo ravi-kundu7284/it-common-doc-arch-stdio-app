@@ -1,5 +1,13 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { isExpired } from "./crypto";
+import { getEnvVar } from "./env";
+
+export { getEnvVar };
+
+let lastDbError: string | null = null;
+export function getLastDbError(): string | null {
+  return lastDbError;
+}
 
 /**
  * Dynamic resolution of database connection parameters from Git environment variables,
@@ -7,21 +15,20 @@ import { isExpired } from "./crypto";
  */
 export function resolveSupabaseConfig(): { url: string; key: string } {
   let url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
+    getEnvVar("NEXT_PUBLIC_SUPABASE_URL") ||
+    getEnvVar("SUPABASE_URL") ||
     "";
 
   let key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_KEY ||
+    getEnvVar("SUPABASE_SERVICE_ROLE_KEY") ||
+    getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
+    getEnvVar("SUPABASE_ANON_KEY") ||
+    getEnvVar("SUPABASE_KEY") ||
     "";
 
   // If URL is not explicitly set, try extracting Supabase project ref from DATABASE_URL
-  // Example DATABASE_URL: postgresql://postgres.abcdefghijklmno:password@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-  if (!url && process.env.DATABASE_URL) {
-    const dbUrl = process.env.DATABASE_URL;
+  const dbUrl = getEnvVar("DATABASE_URL");
+  if (!url && dbUrl) {
     const match = dbUrl.match(/postgres\.([a-zA-Z0-9_-]+):/);
     if (match && match[1]) {
       url = `https://${match[1]}.supabase.co`;
@@ -427,11 +434,65 @@ const sandboxDb = getSandboxDb();
 // Unified Repository Operations (Supabase PostgreSQL + Local Sandbox Fallback)
 // ============================================================================
 
+let seedCheckAttempted = false;
+
+export async function dbEnsureSeedUsers(client: SupabaseClient): Promise<void> {
+  if (seedCheckAttempted) return;
+  seedCheckAttempted = true;
+  try {
+    const { count, error } = await client
+      .from("app_users")
+      .select("id", { count: "exact", head: true });
+
+    if (error) {
+      lastDbError = error.message;
+      console.warn("Supabase app_users table check error:", error.message);
+      return;
+    }
+
+    if (count === 0) {
+      console.log("Empty app_users table detected. Auto-seeding default demo accounts...");
+      await client.from("app_users").insert([
+        {
+          id: "00000000-0000-0000-0000-000000000001",
+          username: "demo_architect",
+          email: "architect@docarch.ai",
+          password_hash:
+            "223a54b3c1d9f8e7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1",
+          password_salt: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
+          full_name: "Lead System Architect",
+          designation: "Principal Enterprise Architect",
+          role: "architect",
+          failed_login_attempts: 0,
+        },
+        {
+          id: "00000000-0000-0000-0000-000000000002",
+          username: "admin",
+          email: "admin@docarch.ai",
+          password_hash:
+            "389c894200676cb400ff5021e5f8f8b89e6eb1ad373801f92e42ca427189a7bbd377b83ecbf1fe4f4949a567a13c9ff42cbbbf1c4d9bc213825fdb8b0ba315e1",
+          password_salt: "a4f5b8c2d1e0f3a6b9c8d7e6f5a4b3c2",
+          full_name: "System Administrator",
+          designation: "Chief Technology Architect",
+          role: "admin",
+          failed_login_attempts: 0,
+        },
+      ]);
+    }
+  } catch (err: any) {
+    lastDbError = err.message;
+    console.warn("Auto-seed error:", err);
+  }
+}
+
 export async function dbFindUser(identifier: string): Promise<AppUser | null> {
   const client = getSupabaseClient();
   if (!client) {
     return sandboxDb.findUserByEmailOrUsername(identifier);
   }
+
+  // Ensure seed accounts exist if this is the first query
+  await dbEnsureSeedUsers(client);
 
   const clean = identifier.toLowerCase().trim();
   const { data, error } = await client
@@ -441,6 +502,7 @@ export async function dbFindUser(identifier: string): Promise<AppUser | null> {
     .maybeSingle();
 
   if (error) {
+    lastDbError = error.message;
     console.error("Supabase user search error:", error);
     return sandboxDb.findUserByEmailOrUsername(identifier);
   }
@@ -460,6 +522,7 @@ export async function dbFindUserById(id: string): Promise<AppUser | null> {
     .maybeSingle();
 
   if (error) {
+    lastDbError = error.message;
     console.error("Supabase user lookup by ID error:", error);
     return sandboxDb.findUserById(id);
   }
@@ -493,6 +556,7 @@ export async function dbCreateUser(
     .single();
 
   if (error) {
+    lastDbError = error.message;
     console.error("Supabase user creation error:", error);
     return sandboxDb.createUser(user);
   }
@@ -860,4 +924,120 @@ export async function dbPurgeExpired(): Promise<number> {
     }
   }
   return countMemory;
+}
+
+export interface DbHealthReport {
+  connected: boolean;
+  isConfigured: boolean;
+  url: string;
+  hasKey: boolean;
+  keyType: "service_role" | "anon" | "none";
+  tables: {
+    app_users: { ok: boolean; count?: number; error?: string };
+    user_ai_configurations: { ok: boolean; error?: string };
+    user_sessions: { ok: boolean; error?: string };
+    security_audit_logs: { ok: boolean; error?: string };
+  };
+  missingTables: string[];
+  recommendation?: string;
+}
+
+export async function dbCheckHealth(): Promise<DbHealthReport> {
+  const { url, key } = resolveSupabaseConfig();
+  const isConfigured = isSupabaseConfigured();
+
+  const report: DbHealthReport = {
+    connected: false,
+    isConfigured,
+    url: url ? `${url.slice(0, 20)}...` : "(not configured)",
+    hasKey: Boolean(key),
+    keyType: key ? (key.length > 100 ? "service_role" : "anon") : "none",
+    tables: {
+      app_users: { ok: false },
+      user_ai_configurations: { ok: false },
+      user_sessions: { ok: false },
+      security_audit_logs: { ok: false },
+    },
+    missingTables: [],
+  };
+
+  const client = getSupabaseClient();
+  if (!client) {
+    report.recommendation =
+      "Supabase database connection parameters are not detected in the Cloudflare Pages runtime. Please configure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Cloudflare Pages Dashboard -> Settings -> Environment variables.";
+    return report;
+  }
+
+  // 1. Check app_users
+  try {
+    const { count, error } = await client
+      .from("app_users")
+      .select("id", { count: "exact", head: true });
+    if (error) {
+      report.tables.app_users = { ok: false, error: error.message };
+      report.missingTables.push("app_users");
+    } else {
+      report.tables.app_users = { ok: true, count: count ?? 0 };
+    }
+  } catch (e: any) {
+    report.tables.app_users = { ok: false, error: e.message };
+    report.missingTables.push("app_users");
+  }
+
+  // 2. Check user_ai_configurations
+  try {
+    const { error } = await client
+      .from("user_ai_configurations")
+      .select("id", { count: "exact", head: true });
+    if (error) {
+      report.tables.user_ai_configurations = { ok: false, error: error.message };
+      report.missingTables.push("user_ai_configurations");
+    } else {
+      report.tables.user_ai_configurations = { ok: true };
+    }
+  } catch (e: any) {
+    report.tables.user_ai_configurations = { ok: false, error: e.message };
+    report.missingTables.push("user_ai_configurations");
+  }
+
+  // 3. Check user_sessions
+  try {
+    const { error } = await client
+      .from("user_sessions")
+      .select("id", { count: "exact", head: true });
+    if (error) {
+      report.tables.user_sessions = { ok: false, error: error.message };
+      report.missingTables.push("user_sessions");
+    } else {
+      report.tables.user_sessions = { ok: true };
+    }
+  } catch (e: any) {
+    report.tables.user_sessions = { ok: false, error: e.message };
+    report.missingTables.push("user_sessions");
+  }
+
+  // 4. Check security_audit_logs
+  try {
+    const { error } = await client
+      .from("security_audit_logs")
+      .select("id", { count: "exact", head: true });
+    if (error) {
+      report.tables.security_audit_logs = { ok: false, error: error.message };
+      report.missingTables.push("security_audit_logs");
+    } else {
+      report.tables.security_audit_logs = { ok: true };
+    }
+  } catch (e: any) {
+    report.tables.security_audit_logs = { ok: false, error: e.message };
+    report.missingTables.push("security_audit_logs");
+  }
+
+  report.connected = report.missingTables.length === 0;
+  if (!report.connected) {
+    report.recommendation = `Database tables missing: ${report.missingTables.join(", ")}. Please copy the SQL from 'supabase/schema.sql' and run it in your Supabase Dashboard > SQL Editor.`;
+  } else {
+    report.recommendation = "Database is connected and healthy!";
+  }
+
+  return report;
 }
