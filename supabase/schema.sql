@@ -5,10 +5,22 @@
 -- Enable UUID extension if not already present
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- 0. Create dedicated 'dev' schema and grant permissions to Supabase roles
+CREATE SCHEMA IF NOT EXISTS dev;
+
+GRANT USAGE ON SCHEMA dev TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA dev TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA dev TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA dev TO postgres, anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA dev GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA dev GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA dev GRANT ALL ON ROUTINES TO postgres, anon, authenticated, service_role;
+
 -- 1. User Accounts Table
 -- Stores user credentials securely. Passwords are encrypted with PBKDF2 + unique random salt.
 -- Tracks failed attempts for automated 2-minute lockout after 3 failed attempts.
-CREATE TABLE IF NOT EXISTS public.app_users (
+CREATE TABLE IF NOT EXISTS dev.app_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -26,16 +38,16 @@ CREATE TABLE IF NOT EXISTS public.app_users (
 );
 
 -- Fast lookup indexes for authentication and security checks
-CREATE INDEX IF NOT EXISTS idx_users_email ON public.app_users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON public.app_users(username);
-CREATE INDEX IF NOT EXISTS idx_users_reset_token ON public.app_users(reset_token);
-CREATE INDEX IF NOT EXISTS idx_users_locked ON public.app_users(locked_until);
+CREATE INDEX IF NOT EXISTS idx_users_email ON dev.app_users(email);
+CREATE INDEX IF NOT EXISTS idx_users_username ON dev.app_users(username);
+CREATE INDEX IF NOT EXISTS idx_users_reset_token ON dev.app_users(reset_token);
+CREATE INDEX IF NOT EXISTS idx_users_locked ON dev.app_users(locked_until);
 
 -- 2. User AI Configurations Table
 -- Stores AI provider settings and AES-256-GCM encrypted API keys with auto-expiry.
-CREATE TABLE IF NOT EXISTS public.user_ai_configurations (
+CREATE TABLE IF NOT EXISTS dev.user_ai_configurations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES dev.app_users(id) ON DELETE CASCADE,
     provider VARCHAR(30) NOT NULL DEFAULT 'builtin', -- 'builtin' | 'gemini' | 'openai' | 'anthropic'
     model_name VARCHAR(50) NOT NULL DEFAULT 'gemini-1.5-pro',
     encrypted_api_key TEXT,                          -- AES-256-GCM ciphertext
@@ -49,14 +61,14 @@ CREATE TABLE IF NOT EXISTS public.user_ai_configurations (
     CONSTRAINT unique_user_provider UNIQUE(user_id, provider)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ai_config_user ON public.user_ai_configurations(user_id);
-CREATE INDEX IF NOT EXISTS idx_ai_config_expiry ON public.user_ai_configurations(expires_at);
+CREATE INDEX IF NOT EXISTS idx_ai_config_user ON dev.user_ai_configurations(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_config_expiry ON dev.user_ai_configurations(expires_at);
 
 -- 3. User Sessions Table
 -- Tracks active user sessions with token verification, IP, user-agent, and remote revocation.
-CREATE TABLE IF NOT EXISTS public.user_sessions (
+CREATE TABLE IF NOT EXISTS dev.user_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES dev.app_users(id) ON DELETE CASCADE,
     session_token TEXT NOT NULL UNIQUE,
     ip_address VARCHAR(45),
     user_agent TEXT,
@@ -66,15 +78,15 @@ CREATE TABLE IF NOT EXISTS public.user_sessions (
     is_active BOOLEAN DEFAULT TRUE
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON public.user_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON public.user_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_sessions_active ON public.user_sessions(is_active, expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON dev.user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON dev.user_sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_active ON dev.user_sessions(is_active, expires_at);
 
 -- 4. Security Audit Logs Table
 -- Records security events for Admin portal oversight (logins, lockouts, resets, key purges)
-CREATE TABLE IF NOT EXISTS public.security_audit_logs (
+CREATE TABLE IF NOT EXISTS dev.security_audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES public.app_users(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES dev.app_users(id) ON DELETE SET NULL,
     action VARCHAR(50) NOT NULL, -- 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'ACCOUNT_LOCKED', 'PASSWORD_RESET_REQ', 'PASSWORD_RESET_SUCCESS', 'KEY_PURGED', 'ADMIN_ROLE_CHANGE'
     details TEXT,
     ip_address VARCHAR(45),
@@ -82,20 +94,20 @@ CREATE TABLE IF NOT EXISTS public.security_audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_audit_created ON public.security_audit_logs(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_user ON public.security_audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON dev.security_audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON dev.security_audit_logs(user_id);
 
 -- 5. Stored Procedure to Auto-Purge Expired Keys & Deactivate Expired Sessions
-CREATE OR REPLACE FUNCTION public.purge_expired_api_keys()
+CREATE OR REPLACE FUNCTION dev.purge_expired_api_keys()
 RETURNS INT AS $$
 DECLARE
     deleted_keys INT;
 BEGIN
-    DELETE FROM public.user_ai_configurations
+    DELETE FROM dev.user_ai_configurations
     WHERE expires_at IS NOT NULL AND expires_at < NOW();
     GET DIAGNOSTICS deleted_keys = ROW_COUNT;
 
-    UPDATE public.user_sessions
+    UPDATE dev.user_sessions
     SET is_active = FALSE
     WHERE expires_at < NOW() AND is_active = TRUE;
 
@@ -104,31 +116,31 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 6. Row Level Security (RLS)
-ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_ai_configurations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.security_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.app_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.user_ai_configurations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.user_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.security_audit_logs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Service role full access on app_users" ON public.app_users;
+DROP POLICY IF EXISTS "Service role full access on app_users" ON dev.app_users;
 CREATE POLICY "App full access on app_users"
-    ON public.app_users FOR ALL USING (true) WITH CHECK (true);
+    ON dev.app_users FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Service role full access on user_ai_configurations" ON public.user_ai_configurations;
+DROP POLICY IF EXISTS "Service role full access on user_ai_configurations" ON dev.user_ai_configurations;
 CREATE POLICY "App full access on user_ai_configurations"
-    ON public.user_ai_configurations FOR ALL USING (true) WITH CHECK (true);
+    ON dev.user_ai_configurations FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Service role full access on user_sessions" ON public.user_sessions;
+DROP POLICY IF EXISTS "Service role full access on user_sessions" ON dev.user_sessions;
 CREATE POLICY "App full access on user_sessions"
-    ON public.user_sessions FOR ALL USING (true) WITH CHECK (true);
+    ON dev.user_sessions FOR ALL USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "Service role full access on security_audit_logs" ON public.security_audit_logs;
+DROP POLICY IF EXISTS "Service role full access on security_audit_logs" ON dev.security_audit_logs;
 CREATE POLICY "App full access on security_audit_logs"
-    ON public.security_audit_logs FOR ALL USING (true) WITH CHECK (true);
+    ON dev.security_audit_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- 7. Seed Initial Enterprise Accounts
 -- Architect: architect@docarch.ai / Architect123!
 -- Admin: admin@docarch.ai / AdminPassword2026!
-INSERT INTO public.app_users (
+INSERT INTO dev.app_users (
     id, username, email, password_hash, password_salt, full_name, designation, role
 ) VALUES 
 (
@@ -152,4 +164,7 @@ INSERT INTO public.app_users (
     'admin'
 )
 ON CONFLICT (email) DO NOTHING;
+
+-- 8. Refresh PostgREST schema cache immediately
+NOTIFY pgrst, 'reload schema';
 

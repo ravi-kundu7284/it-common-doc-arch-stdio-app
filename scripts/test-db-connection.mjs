@@ -45,12 +45,19 @@ const supabaseKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "";
 
+const schema =
+  process.env.NEXT_PUBLIC_SUPABASE_SCHEMA ||
+  process.env.SUPABASE_SCHEMA ||
+  process.env.DB_SCHEMA ||
+  "dev";
+
 const databaseUrl = process.env.DATABASE_URL || "";
 
 console.log("\n=======================================================");
 console.log(" DocArch AI - Local PostgreSQL Connection Tester");
 console.log("=======================================================");
 console.log(`Supabase URL : ${supabaseUrl || "(not set in .env.local)"}`);
+console.log(`Target Schema: ${schema}`);
 console.log(`Key Configured: ${supabaseKey ? "YES (" + (supabaseKey.length > 50 ? "service_role / jwt" : "short") + ")" : "NO"}`);
 console.log(`DATABASE_URL  : ${databaseUrl ? databaseUrl.replace(/:[^:@]+@/, ":****@") : "(not set)"}`);
 console.log("-------------------------------------------------------\n");
@@ -71,10 +78,11 @@ if (!globalThis.WebSocket) {
 
 const client = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
+  db: { schema },
 });
 
 async function runTests() {
-  console.log("Testing database tables in 'public' schema...\n");
+  console.log(`Testing database tables in '${schema}' schema...\n`);
 
   const tables = [
     { name: "app_users", description: "User accounts, passwords & designations" },
@@ -107,11 +115,17 @@ async function runTests() {
   console.log("\n-------------------------------------------------------");
 
   if (!allOk) {
-    console.log("⚠️ Some tables are missing in your PostgreSQL database!");
+    console.log(`⚠️ Database verification failed for schema '${schema}'!`);
     console.log("\n👉 Resolution:");
-    console.log("1. Open your database SQL client (Supabase SQL Editor or psql).");
-    console.log("2. Run the SQL script from: supabase/schema.sql");
-    console.log("3. Re-run: npm run db:test\n");
+    console.log("1. Open your Supabase Dashboard > SQL Editor: https://supabase.com/dashboard/project/ahyzrleofpdtfzrfsnbz/sql/new");
+    console.log("2. Copy all SQL from: supabase/schema.sql and click 'Run'.");
+    console.log("   (This will create the schema 'dev' and grant all required table permissions).");
+    if (schema !== "public") {
+      console.log(`3. ⚠️ IMPORTANT FOR '${schema}' SCHEMA:`);
+      console.log(`   Go to Supabase Dashboard -> Project Settings -> API -> Data API Settings -> 'Exposed schemas'.`);
+      console.log(`   Add '${schema}' to the list of exposed schemas (e.g. 'public, dev') and save.`);
+    }
+    console.log("4. Re-run: npm run db:test\n");
     process.exit(1);
   }
 

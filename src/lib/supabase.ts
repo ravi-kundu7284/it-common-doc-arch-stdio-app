@@ -18,7 +18,7 @@ export function getLastDbError(): string | null {
  * Dynamic resolution of database connection parameters from Git environment variables,
  * GitHub Secrets/Variables, or Cloudflare Pages environment.
  */
-export function resolveSupabaseConfig(): { url: string; key: string } {
+export function resolveSupabaseConfig(): { url: string; key: string; schema: string } {
   let url =
     getEnvVar("NEXT_PUBLIC_SUPABASE_URL") ||
     getEnvVar("SUPABASE_URL") ||
@@ -31,6 +31,12 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     getEnvVar("SUPABASE_KEY") ||
     "";
 
+  let schema =
+    getEnvVar("NEXT_PUBLIC_SUPABASE_SCHEMA") ||
+    getEnvVar("SUPABASE_SCHEMA") ||
+    getEnvVar("DB_SCHEMA") ||
+    "dev";
+
   // If URL is not explicitly set, try extracting Supabase project ref from DATABASE_URL
   const dbUrl = getEnvVar("DATABASE_URL");
   if (!url && dbUrl) {
@@ -40,7 +46,7 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     }
   }
 
-  return { url, key };
+  return { url, key, schema };
 }
 
 export const isSupabaseConfigured = (): boolean => {
@@ -60,11 +66,14 @@ export const getSupabaseClient = (): SupabaseClient | null => {
     return null;
   }
   if (!supabaseInstance) {
-    const { url, key } = resolveSupabaseConfig();
+    const { url, key, schema } = resolveSupabaseConfig();
     supabaseInstance = createClient(url, key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+      },
+      db: {
+        schema,
       },
     });
   }
@@ -934,6 +943,7 @@ export async function dbPurgeExpired(): Promise<number> {
 export interface DbHealthReport {
   connected: boolean;
   isConfigured: boolean;
+  schema: string;
   url: string;
   hasKey: boolean;
   keyType: "service_role" | "anon" | "none";
@@ -948,12 +958,13 @@ export interface DbHealthReport {
 }
 
 export async function dbCheckHealth(): Promise<DbHealthReport> {
-  const { url, key } = resolveSupabaseConfig();
+  const { url, key, schema } = resolveSupabaseConfig();
   const isConfigured = isSupabaseConfigured();
 
   const report: DbHealthReport = {
     connected: false,
     isConfigured,
+    schema,
     url: url ? `${url.slice(0, 20)}...` : "(not configured)",
     hasKey: Boolean(key),
     keyType: key ? (key.length > 100 ? "service_role" : "anon") : "none",
@@ -1043,9 +1054,16 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
 
   report.connected = report.missingTables.length === 0;
   if (!report.connected) {
-    report.recommendation = `Database tables missing: ${report.missingTables.join(", ")}. Please copy the SQL from 'supabase/schema.sql' and run it in your Supabase Dashboard > SQL Editor.`;
+    const hasPgrst106 = Object.values(report.tables).some((t) =>
+      t.error?.includes("PGRST106") || t.error?.includes("Invalid schema")
+    );
+    if (hasPgrst106) {
+      report.recommendation = `Schema '${schema}' is not exposed in Supabase PostgREST. Please navigate to Supabase Dashboard -> Project Settings -> API -> Data API Settings -> 'Exposed schemas' and add '${schema}' to the list.`;
+    } else {
+      report.recommendation = `Database tables missing in schema '${schema}': ${report.missingTables.join(", ")}. Please copy the SQL from 'supabase/schema.sql' and run it in your Supabase Dashboard > SQL Editor.`;
+    }
   } else {
-    report.recommendation = "Database is connected and healthy!";
+    report.recommendation = `Database is connected and healthy in schema '${schema}'!`;
   }
 
   return report;
