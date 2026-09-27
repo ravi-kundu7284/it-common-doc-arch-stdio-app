@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "DocArch AI - Software Architecture & Technical Design Document Studio",
   description:
     "AI-powered Software Architecture & Technical Design Document (LLD/HLD) generator with interactive Mermaid diagrams, trade-off analysis, and standalone HTML bundle exporting.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

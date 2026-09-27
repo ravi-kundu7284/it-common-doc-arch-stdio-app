@@ -2,6 +2,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { isExpired } from "./crypto";
 import { getEnvVar } from "./env";
 
+// Polyfill WebSocket for Node.js 18 environments if missing
+if (typeof globalThis !== "undefined" && !globalThis.WebSocket) {
+  (globalThis as any).WebSocket = class DummyWebSocket {};
+}
+
 export { getEnvVar };
 
 let lastDbError: string | null = null;
@@ -13,7 +18,7 @@ export function getLastDbError(): string | null {
  * Dynamic resolution of database connection parameters from Git environment variables,
  * GitHub Secrets/Variables, or Cloudflare Pages environment.
  */
-export function resolveSupabaseConfig(): { url: string; key: string } {
+export function resolveSupabaseConfig(): { url: string; key: string; schema: string } {
   let url =
     getEnvVar("NEXT_PUBLIC_SUPABASE_URL") ||
     getEnvVar("SUPABASE_URL") ||
@@ -26,6 +31,12 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     getEnvVar("SUPABASE_KEY") ||
     "";
 
+  let schema =
+    getEnvVar("NEXT_PUBLIC_SUPABASE_SCHEMA") ||
+    getEnvVar("SUPABASE_SCHEMA") ||
+    getEnvVar("DB_SCHEMA") ||
+    "dev";
+
   // If URL is not explicitly set, try extracting Supabase project ref from DATABASE_URL
   const dbUrl = getEnvVar("DATABASE_URL");
   if (!url && dbUrl) {
@@ -35,7 +46,7 @@ export function resolveSupabaseConfig(): { url: string; key: string } {
     }
   }
 
-  return { url, key };
+  return { url, key, schema };
 }
 
 export const isSupabaseConfigured = (): boolean => {
@@ -48,18 +59,21 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
-let supabaseInstance: SupabaseClient | null = null;
+let supabaseInstance: SupabaseClient<any, any, any> | null = null;
 
-export const getSupabaseClient = (): SupabaseClient | null => {
+export const getSupabaseClient = (): SupabaseClient<any, any, any> | null => {
   if (!isSupabaseConfigured()) {
     return null;
   }
   if (!supabaseInstance) {
-    const { url, key } = resolveSupabaseConfig();
+    const { url, key, schema } = resolveSupabaseConfig();
     supabaseInstance = createClient(url, key, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
+      },
+      db: {
+        schema,
       },
     });
   }
@@ -458,7 +472,7 @@ export async function dbEnsureSeedUsers(client: SupabaseClient): Promise<void> {
           username: "demo_architect",
           email: "architect@docarch.ai",
           password_hash:
-            "223a54b3c1d9f8e7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1",
+            "34d892155329cf05df75f20293482bb27bb1886fb6ece06a941c8172d49cca866d92d6635e5e40b4fa43d4b4436c52861fa0c5d17ce7033fdecc88bfb039f142",
           password_salt: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
           full_name: "Lead System Architect",
           designation: "Principal Enterprise Architect",
@@ -470,7 +484,7 @@ export async function dbEnsureSeedUsers(client: SupabaseClient): Promise<void> {
           username: "admin",
           email: "admin@docarch.ai",
           password_hash:
-            "389c894200676cb400ff5021e5f8f8b89e6eb1ad373801f92e42ca427189a7bbd377b83ecbf1fe4f4949a567a13c9ff42cbbbf1c4d9bc213825fdb8b0ba315e1",
+            "ac8b96cd30f9922ce43a1753913920bafc119e3a2c03546738ca4bb03ecdeef6a22fb5eaeeb2abc5dea007dbb8afde4c0d5beeb171ff2b17a09a6f17b1b6f0f9",
           password_salt: "a4f5b8c2d1e0f3a6b9c8d7e6f5a4b3c2",
           full_name: "System Administrator",
           designation: "Chief Technology Architect",
@@ -929,6 +943,7 @@ export async function dbPurgeExpired(): Promise<number> {
 export interface DbHealthReport {
   connected: boolean;
   isConfigured: boolean;
+  schema: string;
   url: string;
   hasKey: boolean;
   keyType: "service_role" | "anon" | "none";
@@ -943,12 +958,13 @@ export interface DbHealthReport {
 }
 
 export async function dbCheckHealth(): Promise<DbHealthReport> {
-  const { url, key } = resolveSupabaseConfig();
+  const { url, key, schema } = resolveSupabaseConfig();
   const isConfigured = isSupabaseConfigured();
 
   const report: DbHealthReport = {
     connected: false,
     isConfigured,
+    schema,
     url: url ? `${url.slice(0, 20)}...` : "(not configured)",
     hasKey: Boolean(key),
     keyType: key ? (key.length > 100 ? "service_role" : "anon") : "none",
@@ -970,9 +986,10 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
 
   // 1. Check app_users
   try {
-    const { count, error } = await client
+    const { data, count, error } = await client
       .from("app_users")
-      .select("id", { count: "exact", head: true });
+      .select("id", { count: "exact" })
+      .limit(1);
     if (error) {
       report.tables.app_users = { ok: false, error: error.message };
       report.missingTables.push("app_users");
@@ -988,7 +1005,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("user_ai_configurations")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.user_ai_configurations = { ok: false, error: error.message };
       report.missingTables.push("user_ai_configurations");
@@ -1004,7 +1022,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("user_sessions")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.user_sessions = { ok: false, error: error.message };
       report.missingTables.push("user_sessions");
@@ -1020,7 +1039,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("security_audit_logs")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.security_audit_logs = { ok: false, error: error.message };
       report.missingTables.push("security_audit_logs");
@@ -1034,9 +1054,16 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
 
   report.connected = report.missingTables.length === 0;
   if (!report.connected) {
-    report.recommendation = `Database tables missing: ${report.missingTables.join(", ")}. Please copy the SQL from 'supabase/schema.sql' and run it in your Supabase Dashboard > SQL Editor.`;
+    const hasPgrst106 = Object.values(report.tables).some((t) =>
+      t.error?.includes("PGRST106") || t.error?.includes("Invalid schema")
+    );
+    if (hasPgrst106) {
+      report.recommendation = `Schema '${schema}' is not exposed in Supabase PostgREST. Please navigate to Supabase Dashboard -> Project Settings -> API -> Data API Settings -> 'Exposed schemas' and add '${schema}' to the list.`;
+    } else {
+      report.recommendation = `Database tables missing in schema '${schema}': ${report.missingTables.join(", ")}. Please copy the SQL from 'supabase/schema.sql' and run it in your Supabase Dashboard > SQL Editor.`;
+    }
   } else {
-    report.recommendation = "Database is connected and healthy!";
+    report.recommendation = `Database is connected and healthy in schema '${schema}'!`;
   }
 
   return report;

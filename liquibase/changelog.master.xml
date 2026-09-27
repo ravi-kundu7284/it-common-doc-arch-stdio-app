@@ -5,6 +5,9 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
+    <!-- 000: Create Schema and Role Grants -->
+    <include file="changesets/000-create-dev-schema.sql" relativeToChangelogFile="true"/>
+
     <!-- 001: Initial App Users Schema -->
     <include file="changesets/001-create-app-users.sql" relativeToChangelogFile="true"/>
 
@@ -22,5 +25,8 @@
 
     <!-- 006: Stored Procedure to Auto-Purge Expired Keys -->
     <include file="changesets/006-create-purge-procedure.sql" relativeToChangelogFile="true"/>
+
+    <!-- 007: Row Level Security (RLS) and Seed Enterprise Accounts -->
+    <include file="changesets/007-enable-rls-and-seed.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

@@ -17,7 +17,16 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     checkSession();
-  }, [checkSession]);
+
+    // Safety timeout: Ensure page never gets stuck on loader
+    const timer = setTimeout(() => {
+      if (useAuthStore.getState().isLoading) {
+        useAuthStore.setState({ isLoading: false });
+      }
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   if (!mounted || isLoading) {
     return (

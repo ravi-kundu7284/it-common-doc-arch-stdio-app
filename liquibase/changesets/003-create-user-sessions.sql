@@ -2,9 +2,9 @@
 -- changeset ravi.kundu:003-create-user-sessions
 -- comment: Create user_sessions table for active user session management and tracking
 
-CREATE TABLE IF NOT EXISTS public.user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     session_token TEXT NOT NULL UNIQUE,
     ip_address VARCHAR(45),
     user_agent TEXT,
@@ -14,6 +14,6 @@ CREATE TABLE IF NOT EXISTS public.user_sessions (
     is_active BOOLEAN DEFAULT TRUE
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON public.user_sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON public.user_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_sessions_active ON public.user_sessions(is_active, expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_active ON user_sessions(is_active, expires_at);
