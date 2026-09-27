@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Pages (Main Branch Only)
+name: Deploy 
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
   deploy-to-cloudflare:
     runs-on: ubuntu-latest
-    name: Build & Deploy to Cloudflare Pages (Production)
+    name: Build & Deploy
     permissions:
       contents: read
       deployments: write
