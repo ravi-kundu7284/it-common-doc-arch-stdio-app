@@ -87,15 +87,16 @@ async function runTests() {
 
   for (const t of tables) {
     try {
-      const { count, error } = await client
+      const { data, count, error } = await client
         .from(t.name)
-        .select("*", { count: "exact", head: true });
+        .select("id", { count: "exact" })
+        .limit(1);
 
       if (error) {
         allOk = false;
-        console.log(`❌ [FAIL] Table '${t.name}': ${error.message}`);
+        console.log(`❌ [FAIL] Table '${t.name}': ${error.message} (Code: ${error.code || 'unknown'})`);
       } else {
-        console.log(`✓ [PASS] Table '${t.name}' exists (${count} row(s)) - ${t.description}`);
+        console.log(`✓ [PASS] Table '${t.name}' exists (${count ?? 0} row(s)) - ${t.description}`);
       }
     } catch (err) {
       allOk = false;

@@ -975,9 +975,10 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
 
   // 1. Check app_users
   try {
-    const { count, error } = await client
+    const { data, count, error } = await client
       .from("app_users")
-      .select("id", { count: "exact", head: true });
+      .select("id", { count: "exact" })
+      .limit(1);
     if (error) {
       report.tables.app_users = { ok: false, error: error.message };
       report.missingTables.push("app_users");
@@ -993,7 +994,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("user_ai_configurations")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.user_ai_configurations = { ok: false, error: error.message };
       report.missingTables.push("user_ai_configurations");
@@ -1009,7 +1011,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("user_sessions")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.user_sessions = { ok: false, error: error.message };
       report.missingTables.push("user_sessions");
@@ -1025,7 +1028,8 @@ export async function dbCheckHealth(): Promise<DbHealthReport> {
   try {
     const { error } = await client
       .from("security_audit_logs")
-      .select("id", { count: "exact", head: true });
+      .select("id")
+      .limit(1);
     if (error) {
       report.tables.security_audit_logs = { ok: false, error: error.message };
       report.missingTables.push("security_audit_logs");
