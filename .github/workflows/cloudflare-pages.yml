@@ -38,4 +38,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .vercel/output/static --project-name=docarch-ai --branch=main --commit-dirty=true
+          command: pages deploy .vercel/output/static --project-name=it-common-doc-arch-stdio-app --branch=main --commit-dirty=true
