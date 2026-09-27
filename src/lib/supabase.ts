@@ -472,7 +472,7 @@ export async function dbEnsureSeedUsers(client: SupabaseClient): Promise<void> {
           username: "demo_architect",
           email: "architect@docarch.ai",
           password_hash:
-            "223a54b3c1d9f8e7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1",
+            "34d892155329cf05df75f20293482bb27bb1886fb6ece06a941c8172d49cca866d92d6635e5e40b4fa43d4b4436c52861fa0c5d17ce7033fdecc88bfb039f142",
           password_salt: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
           full_name: "Lead System Architect",
           designation: "Principal Enterprise Architect",
@@ -484,7 +484,7 @@ export async function dbEnsureSeedUsers(client: SupabaseClient): Promise<void> {
           username: "admin",
           email: "admin@docarch.ai",
           password_hash:
-            "389c894200676cb400ff5021e5f8f8b89e6eb1ad373801f92e42ca427189a7bbd377b83ecbf1fe4f4949a567a13c9ff42cbbbf1c4d9bc213825fdb8b0ba315e1",
+            "ac8b96cd30f9922ce43a1753913920bafc119e3a2c03546738ca4bb03ecdeef6a22fb5eaeeb2abc5dea007dbb8afde4c0d5beeb171ff2b17a09a6f17b1b6f0f9",
           password_salt: "a4f5b8c2d1e0f3a6b9c8d7e6f5a4b3c2",
           full_name: "System Administrator",
           designation: "Chief Technology Architect",
