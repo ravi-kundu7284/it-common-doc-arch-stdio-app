@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateStandardDocument } from "@/lib/doc-generator";
 
+export const runtime = "edge";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
