@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 001: Initial App Users Schema -->
+    <include file="changesets/001-create-app-users.sql" relativeToChangelogFile="true"/>
+
+    <!-- 002: User AI Configurations (AES-256-GCM Encrypted Keys & Expiry) -->
+    <include file="changesets/002-create-user-ai-configs.sql" relativeToChangelogFile="true"/>
+
+    <!-- 003: User Sessions Tracking -->
+    <include file="changesets/003-create-user-sessions.sql" relativeToChangelogFile="true"/>
+
+    <!-- 004: Add Designation, Login Attempt Lockout & Password Reset -->
+    <include file="changesets/004-add-designation-and-lockout.sql" relativeToChangelogFile="true"/>
+
+    <!-- 005: Security Audit Logs for Admin Portal -->
+    <include file="changesets/005-create-audit-logs.sql" relativeToChangelogFile="true"/>
+
+    <!-- 006: Stored Procedure to Auto-Purge Expired Keys -->
+    <include file="changesets/006-create-purge-procedure.sql" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

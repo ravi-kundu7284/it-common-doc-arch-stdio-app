@@ -16,7 +16,6 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [renderId] = useState(() => "mermaid-" + Math.random().toString(36).substring(2, 9));
 
   useEffect(() => {
     let isMounted = true;
@@ -28,6 +27,9 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
         return;
       }
 
+      // Generate unique ID per render call to prevent Mermaid ID collisions
+      const renderId = `mermaid_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
       try {
         if (!mermaidInstance) {
           const mermaidModule = await import("mermaid");
@@ -36,7 +38,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
             startOnLoad: false,
             theme: "neutral",
             securityLevel: "loose",
-            fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto",
+            fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
             themeVariables: {
               fontSize: "13px",
               primaryColor: "#e0e7ff",
@@ -60,6 +62,12 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
           console.warn("Mermaid render error:", err);
           setError(err?.message || "Invalid Mermaid Diagram Syntax");
         }
+      } finally {
+        // Clean up temporary DOM elements created by Mermaid
+        const el = document.getElementById(renderId);
+        if (el) el.remove();
+        const dEl = document.getElementById("d" + renderId);
+        if (dEl) dEl.remove();
       }
     };
 
@@ -67,10 +75,8 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
 
     return () => {
       isMounted = false;
-      const leftover = document.getElementById(renderId);
-      if (leftover) leftover.remove();
     };
-  }, [chart, renderId]);
+  }, [chart]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(chart);
@@ -89,7 +95,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500/80 animate-pulse" />
           <span className="font-mono uppercase tracking-wider text-[11px] text-slate-300 font-semibold">
-            Mermaid Diagram
+            Architecture Diagram
           </span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -116,7 +122,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
         {error ? (
           <div className="flex items-start gap-3 p-4 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300 text-sm">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-            <div>
+            <div className="w-full">
               <p className="font-semibold text-red-200">Diagram Compilation Error</p>
               <p className="text-xs font-mono text-red-300/80 mt-1">{error}</p>
               <pre className="mt-3 p-2 bg-slate-950 rounded text-xs text-slate-300 overflow-x-auto max-h-32">

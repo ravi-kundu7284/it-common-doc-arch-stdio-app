@@ -6,16 +6,20 @@ import { RequirementsWizard } from "@/components/requirements-wizard";
 import { ArchitectureRecommender } from "@/components/architecture-recommender";
 import { DocumentStudio } from "@/components/document-studio";
 import { useDocStore } from "@/store/use-doc-store";
+import { useAuthStore } from "@/store/use-auth-store";
+import { LoginLanding } from "@/components/login-landing";
 
 export default function Home() {
   const { activeTab } = useDocStore();
+  const { isAuthenticated, isLoading, checkSession } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    checkSession();
+  }, [checkSession]);
 
-  if (!mounted) {
+  if (!mounted || isLoading) {
     return (
       <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-slate-400 text-sm">
         <div className="flex items-center gap-3">
@@ -24,6 +28,11 @@ export default function Home() {
         </div>
       </div>
     );
+  }
+
+  // App starter lands directly on login page when unauthenticated
+  if (!isAuthenticated) {
+    return <LoginLanding />;
   }
 
   return (
@@ -38,3 +47,4 @@ export default function Home() {
     </main>
   );
 }
+
