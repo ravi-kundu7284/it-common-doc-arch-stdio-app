@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useDocStore } from "@/store/use-doc-store";
 import { useAuthStore } from "@/store/use-auth-store";
 import {
@@ -21,6 +22,7 @@ import {
   LogOut,
   User,
   ShieldCheck,
+  ShieldAlert,
   Clock,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
@@ -270,6 +272,18 @@ export const Navbar: React.FC = () => {
               )}
             </div>
 
+            {/* Admin Portal Button (If user is Administrator) */}
+            {isAuthenticated && user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold shadow-sm transition"
+                title="Open Administrator Control Portal"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+            )}
+
             {/* User Authentication & Sign Off Button */}
             {isAuthenticated ? (
               <div className="flex items-center gap-1.5 p-1 pl-2 pr-1.5 rounded-xl bg-slate-900 border border-slate-800">
@@ -280,15 +294,9 @@ export const Navbar: React.FC = () => {
                   <div className="text-[11px] font-semibold text-slate-200 leading-tight">
                     @{user?.username}
                   </div>
-                  {aiConfig?.hasKey ? (
-                    <div className="text-[9px] text-emerald-400 font-mono leading-none">
-                      {aiConfig.provider}: {aiConfig.daysRemaining}d
-                    </div>
-                  ) : (
-                    <div className="text-[9px] text-slate-500 font-mono leading-none">
-                      No API Key
-                    </div>
-                  )}
+                  <div className="text-[9px] text-slate-400 truncate max-w-[120px] leading-tight" title={user?.designation}>
+                    {user?.designation || "Architect"}
+                  </div>
                 </div>
                 <button
                   onClick={() => logout()}

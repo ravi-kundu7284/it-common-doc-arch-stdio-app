@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbCreateUser } from "@/lib/supabase";
+import { dbFindUser, dbCreateUser, dbCreateSession } from "@/lib/supabase";
 import { hashPassword, createSessionToken } from "@/lib/crypto";
-
-export const runtime = "edge";
+import { getClientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || "Unknown Client";
+
     const body = await req.json();
-    const { username, email, password, fullName } = body;
+    const { username, email, password, fullName, designation } = body;
 
     // Validation
     if (!username || username.trim().length < 3) {
@@ -60,7 +62,28 @@ export async function POST(req: NextRequest) {
       password_hash: hash,
       password_salt: salt,
       full_name: fullName || username,
+      designation: designation || "Software Architect",
       role: "architect",
+    });
+
+    const sessionToken = await createSessionToken({
+      userId: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      fullName: newUser.full_name,
+      designation: newUser.designation,
+      role: newUser.role,
+    });
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    await dbCreateSession({
+      user_id: newUser.id,
+      session_token: sessionToken,
+      ip_address: ip,
+      user_agent: userAgent,
+      expires_at: expiresAt,
+      is_active: true,
     });
 
     // Sanitize response
@@ -69,17 +92,10 @@ export async function POST(req: NextRequest) {
       username: newUser.username,
       email: newUser.email,
       fullName: newUser.full_name,
+      designation: newUser.designation,
       role: newUser.role,
       createdAt: newUser.created_at,
     };
-
-    const sessionToken = await createSessionToken({
-      userId: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      fullName: newUser.full_name,
-      role: newUser.role,
-    });
 
     const response = NextResponse.json({
       success: true,

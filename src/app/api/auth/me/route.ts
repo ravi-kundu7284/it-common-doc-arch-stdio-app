@@ -6,8 +6,6 @@ import {
   isExpired,
 } from "@/lib/crypto";
 
-export const runtime = "edge";
-
 export async function GET(req: NextRequest) {
   try {
     const sessionCookie = req.cookies.get("docarch_session")?.value;
@@ -35,6 +33,7 @@ export async function GET(req: NextRequest) {
         username: sessionData.username,
         email: sessionData.email,
         full_name: sessionData.fullName,
+        designation: sessionData.designation || "Software Architect",
         role: sessionData.role || "architect",
         created_at: new Date().toISOString(),
         last_login_at: new Date().toISOString(),
@@ -95,6 +94,7 @@ export async function GET(req: NextRequest) {
         username: user.username,
         email: user.email,
         fullName: user.full_name,
+        designation: user.designation || "Software Architect",
         role: user.role,
         lastLoginAt: user.last_login_at,
       },

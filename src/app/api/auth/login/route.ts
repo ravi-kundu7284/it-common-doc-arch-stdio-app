@@ -1,11 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbUpdateLastLogin } from "@/lib/supabase";
+import { dbFindUser, dbUpdateLastLogin, dbCreateSession } from "@/lib/supabase";
 import { verifyPassword, createSessionToken } from "@/lib/crypto";
-
-export const runtime = "edge";
+import {
+  getClientIp,
+  checkIpRateLimit,
+  checkUserLockout,
+  recordFailedLogin,
+  recordSuccessfulLogin,
+} from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const userAgent = req.headers.get("user-agent") || "Unknown Client";
+
+    // 1. IP Throttle Check: Maximum 5 attempts per minute
+    const ipCheck = checkIpRateLimit(ip);
+    if (!ipCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Rate limit exceeded: Maximum 5 login attempts per minute allowed. Please try again in ${ipCheck.retryAfterSeconds} seconds.`,
+          retryAfterSeconds: ipCheck.retryAfterSeconds,
+          isRateLimited: true,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { identifier, password } = body;
 
@@ -16,6 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2. User Lookup
     const user = await dbFindUser(identifier);
     if (!user) {
       return NextResponse.json(
@@ -24,35 +47,84 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify password with timing-safe PBKDF2 check
+    // 3. User Lockout Check: 3 failed attempts = 2 minute wait
+    const lockoutStatus = checkUserLockout(user);
+    if (lockoutStatus.isLocked) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Account is temporarily locked due to 3 consecutive failed login attempts. Please wait ${lockoutStatus.waitSeconds} seconds before trying again.`,
+          isLocked: true,
+          waitSeconds: lockoutStatus.waitSeconds,
+        },
+        { status: 423 } // 423 Locked
+      );
+    }
+
+    // 4. Verify password with PBKDF2
     const isValid = await verifyPassword(password, user.password_hash, user.password_salt);
     if (!isValid) {
+      const failedResult = await recordFailedLogin(user, ip, userAgent);
+
+      if (failedResult.isLocked) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Too many failed attempts! Account is now locked for 2 minutes. Please wait ${failedResult.waitSeconds} seconds.`,
+            isLocked: true,
+            waitSeconds: failedResult.waitSeconds,
+          },
+          { status: 423 }
+        );
+      }
+
+      const attemptsRemaining = 3 - failedResult.attempts;
       return NextResponse.json(
-        { success: false, error: "Invalid username or password" },
+        {
+          success: false,
+          error: `Invalid credentials. (Attempt ${failedResult.attempts} of 3 - ${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} left before 2-minute lockout).`,
+          attempts: failedResult.attempts,
+          attemptsRemaining,
+        },
         { status: 401 }
       );
     }
 
-    // Update last login timestamp
+    // 5. Successful Login: Reset lockout counters and record audit
+    await recordSuccessfulLogin(user, ip, userAgent);
     await dbUpdateLastLogin(user.id);
 
-    // Sanitize user object
-    const sanitized = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      fullName: user.full_name,
-      role: user.role,
-      lastLoginAt: new Date().toISOString(),
-    };
-
+    // 6. Generate Session Token & Track Active Session
     const sessionToken = await createSessionToken({
       userId: user.id,
       username: user.username,
       email: user.email,
       fullName: user.full_name,
+      designation: user.designation,
       role: user.role,
     });
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    await dbCreateSession({
+      user_id: user.id,
+      session_token: sessionToken,
+      ip_address: ip,
+      user_agent: userAgent,
+      expires_at: expiresAt,
+      is_active: true,
+    });
+
+    // 7. Sanitize user object for response
+    const sanitized = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      fullName: user.full_name,
+      designation: user.designation || "Software Architect",
+      role: user.role || "architect",
+      lastLoginAt: new Date().toISOString(),
+    };
 
     const response = NextResponse.json({
       success: true,
@@ -60,7 +132,7 @@ export async function POST(req: NextRequest) {
       user: sanitized,
     });
 
-    // Set secure HTTP-only session cookie
+    // 8. Set secure HTTP-only session cookie
     response.cookies.set("docarch_session", sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

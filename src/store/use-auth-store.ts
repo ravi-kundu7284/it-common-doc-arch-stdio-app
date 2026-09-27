@@ -5,7 +5,8 @@ export interface UserProfile {
   username: string;
   email: string;
   fullName?: string;
-  role?: string;
+  designation?: string;
+  role?: string; // 'architect' | 'admin' | 'reviewer'
   lastLoginAt?: string;
 }
 
@@ -26,18 +27,39 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isAuthModalOpen: boolean;
-  authModalMode: "signin" | "signup";
+  authModalMode: "signin" | "signup" | "forgot" | "reset";
+  activeResetToken: string | null;
 
   // Actions
   checkSession: () => Promise<void>;
-  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (identifier: string, password: string) => Promise<{
+    success: boolean;
+    error?: string;
+    isLocked?: boolean;
+    waitSeconds?: number;
+    isRateLimited?: boolean;
+    retryAfterSeconds?: number;
+    attemptsRemaining?: number;
+  }>;
   register: (
     username: string,
     email: string,
     password: string,
-    fullName?: string
+    fullName?: string,
+    designation?: string
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    previewResetLink?: string;
+    previewToken?: string;
+  }>;
+  resetPassword: (
+    token: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
   saveAiConfig: (
     provider: string,
     modelName: string,
@@ -45,7 +67,10 @@ interface AuthState {
     expiresInDays: number
   ) => Promise<{ success: boolean; error?: string; message?: string }>;
   deleteAiConfig: () => Promise<{ success: boolean; error?: string }>;
-  openAuthModal: (mode?: "signin" | "signup") => void;
+  openAuthModal: (
+    mode?: "signin" | "signup" | "forgot" | "reset",
+    resetToken?: string
+  ) => void;
   closeAuthModal: () => void;
 }
 
@@ -56,6 +81,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   isAuthModalOpen: false,
   authModalMode: "signin",
+  activeResetToken: null,
 
   checkSession: async () => {
     try {
@@ -95,7 +121,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        return { success: false, error: data.error || "Login failed" };
+        return {
+          success: false,
+          error: data.error || "Login failed",
+          isLocked: data.isLocked,
+          waitSeconds: data.waitSeconds,
+          isRateLimited: data.isRateLimited,
+          retryAfterSeconds: data.retryAfterSeconds,
+          attemptsRemaining: data.attemptsRemaining,
+        };
       }
 
       set({
@@ -112,13 +146,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (username, email, password, fullName) => {
+  register: async (username, email, password, fullName, designation) => {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, email, password, fullName }),
+        body: JSON.stringify({ username, email, password, fullName, designation }),
       });
 
       const data = await res.json();
@@ -134,6 +168,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       await get().checkSession();
       return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  forgotPassword: async (email: string) => {
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Failed to initiate reset." };
+      }
+      return {
+        success: true,
+        message: data.message,
+        previewResetLink: data.previewResetLink,
+        previewToken: data.previewToken,
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  resetPassword: async (token: string, newPassword: string) => {
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Password reset failed." };
+      }
+      return { success: true, message: data.message };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
     }
@@ -183,9 +256,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         credentials: "include",
       });
       const data = await res.json();
-
       if (!res.ok || !data.success) {
-        return { success: false, error: data.error || "Failed to remove key" };
+        return { success: false, error: data.error || "Failed to delete API key" };
       }
 
       set({ aiConfig: null });
@@ -195,8 +267,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  openAuthModal: (mode = "signin") =>
-    set({ isAuthModalOpen: true, authModalMode: mode }),
+  openAuthModal: (mode = "signin", resetToken?: string) => {
+    set({
+      isAuthModalOpen: true,
+      authModalMode: mode,
+      activeResetToken: resetToken || null,
+    });
+  },
 
-  closeAuthModal: () => set({ isAuthModalOpen: false }),
+  closeAuthModal: () => {
+    set({ isAuthModalOpen: false, activeResetToken: null });
+  },
 }));

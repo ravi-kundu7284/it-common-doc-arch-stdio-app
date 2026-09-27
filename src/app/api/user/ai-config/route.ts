@@ -11,8 +11,6 @@ import {
   serializeAiConfigCookie,
 } from "@/lib/crypto";
 
-export const runtime = "edge";
-
 export async function POST(req: NextRequest) {
   try {
     const sessionCookie = req.cookies.get("docarch_session")?.value;

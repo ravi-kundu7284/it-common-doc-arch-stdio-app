@@ -197,6 +197,7 @@ export interface SessionData {
   username: string;
   email: string;
   fullName?: string;
+  designation?: string;
   role?: string;
   expiresAt: number;
 }
