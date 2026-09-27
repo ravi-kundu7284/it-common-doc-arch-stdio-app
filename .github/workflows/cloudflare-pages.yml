@@ -1,4 +1,4 @@
-name: Deploy 
+name: Deploy to Cloudflare Pages (Main Branch Only)
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
   deploy-to-cloudflare:
     runs-on: ubuntu-latest
-    name: Build & Deploy
+    name: Build & Deploy to Cloudflare Pages
     permissions:
       contents: read
       deployments: write
@@ -32,6 +32,14 @@ jobs:
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Ensure Cloudflare Pages Project Exists
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create it-common-doc-arch-stdio-app --production-branch main
+        continue-on-error: true
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
