@@ -53,11 +53,6 @@ export const Navbar: React.FC = () => {
   const [copiedMd, setCopiedMd] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Check user session on mount
-  useEffect(() => {
-    checkSession();
-  }, [checkSession]);
-
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

@@ -59,9 +59,9 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
-let supabaseInstance: SupabaseClient | null = null;
+let supabaseInstance: SupabaseClient<any, any, any> | null = null;
 
-export const getSupabaseClient = (): SupabaseClient | null => {
+export const getSupabaseClient = (): SupabaseClient<any, any, any> | null => {
   if (!isSupabaseConfigured()) {
     return null;
   }

@@ -2,6 +2,8 @@
 -- changeset ravi.kundu:001-create-app-users
 -- comment: Create app_users table with PBKDF2 hashed passwords and role support
 
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS app_users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username VARCHAR(50) UNIQUE NOT NULL,
