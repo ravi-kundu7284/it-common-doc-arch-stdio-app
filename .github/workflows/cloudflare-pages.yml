@@ -28,7 +28,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Build Next.js with Cloudflare Next-on-Pages
-        run: npx @cloudflare/next-on-pages@1 --experimental-minify
+        run: npx @cloudflare/next-on-pages@1
         env:
           NODE_ENV: production
           NEXT_TELEMETRY_DISABLED: 1

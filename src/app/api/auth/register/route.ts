@@ -3,6 +3,8 @@ import { dbFindUser, dbCreateUser, dbCreateSession } from "@/lib/supabase";
 import { hashPassword, createSessionToken } from "@/lib/crypto";
 import { getClientIp } from "@/lib/rate-limit";
 
+export const runtime = "edge";
+
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);

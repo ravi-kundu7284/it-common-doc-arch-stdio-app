@@ -6,6 +6,8 @@ import {
   isExpired,
 } from "@/lib/crypto";
 
+export const runtime = "edge";
+
 export async function GET(req: NextRequest) {
   try {
     const sessionCookie = req.cookies.get("docarch_session")?.value;

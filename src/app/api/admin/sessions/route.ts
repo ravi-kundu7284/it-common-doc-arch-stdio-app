@@ -7,6 +7,8 @@ import {
 } from "@/lib/supabase";
 import { verifySessionToken } from "@/lib/crypto";
 
+export const runtime = "edge";
+
 async function verifyAdminAuth(req: NextRequest) {
   const sessionCookie = req.cookies.get("docarch_session")?.value;
   const sessionData = await verifySessionToken(sessionCookie);
