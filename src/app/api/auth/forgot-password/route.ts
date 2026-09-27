@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbFindUser, dbSetPasswordResetToken, dbRecordAuditLog } from "@/lib/supabase";
 import { getClientIp } from "@/lib/rate-limit";
 
+export const runtime = "edge";
+
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
