@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useDocStore } from "@/store/use-doc-store";
+import { useAuthStore } from "@/store/use-auth-store";
 import {
   FileText,
   Cpu,
@@ -16,10 +17,16 @@ import {
   ChevronDown,
   Sparkles,
   ExternalLink,
+  LogIn,
+  LogOut,
+  User,
+  ShieldCheck,
+  Clock,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
 import { TemplatesModal } from "./templates-modal";
 import { SettingsModal } from "./settings-modal";
+import { AuthModal } from "./auth-modal";
 
 export const Navbar: React.FC = () => {
   const {
@@ -27,14 +34,27 @@ export const Navbar: React.FC = () => {
     setActiveTab,
     currentProject,
     resetProject,
-    apiSettings,
   } = useDocStore();
+
+  const {
+    user,
+    aiConfig,
+    isAuthenticated,
+    logout,
+    openAuthModal,
+    checkSession,
+  } = useAuthStore();
 
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check user session on mount
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -80,7 +100,6 @@ export const Navbar: React.FC = () => {
 
   const handlePrint = () => {
     setIsExportOpen(false);
-    // Switch to studio tab preview if not already there, then trigger window.print
     setActiveTab("studio");
     setTimeout(() => {
       window.print();
@@ -151,7 +170,7 @@ export const Navbar: React.FC = () => {
             </button>
           </nav>
 
-          {/* Utility Actions */}
+          {/* Utility Actions & User Auth */}
           <div className="flex items-center gap-2">
             {/* Templates Library */}
             <button
@@ -163,13 +182,16 @@ export const Navbar: React.FC = () => {
               <span className="hidden sm:inline">Templates</span>
             </button>
 
-            {/* AI Settings */}
+            {/* AI Settings / Vault */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
-              title="LLM Settings & Provider"
+              className="relative p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+              title="AI Provider & Key Vault Settings"
             >
               <Settings className="w-4 h-4 text-slate-300" />
+              {aiConfig?.hasKey && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
             </button>
 
             {/* Export Dropdown */}
@@ -196,7 +218,7 @@ export const Navbar: React.FC = () => {
                     <FileCode className="w-4 h-4 text-cyan-400" />
                     <div>
                       <div className="font-medium">Standalone HTML Bundle</div>
-                      <div className="text-[10px] text-slate-400">Single self-contained file with CSS & Mermaid</div>
+                      <div className="text-[10px] text-slate-400">Single self-contained file with tables & Mermaid</div>
                     </div>
                   </button>
 
@@ -248,7 +270,45 @@ export const Navbar: React.FC = () => {
               )}
             </div>
 
-            {/* Reset */}
+            {/* User Authentication & Sign Off Button */}
+            {isAuthenticated ? (
+              <div className="flex items-center gap-1.5 p-1 pl-2 pr-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center font-bold text-[11px] text-white">
+                  {user?.username.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden lg:block text-left mr-1">
+                  <div className="text-[11px] font-semibold text-slate-200 leading-tight">
+                    @{user?.username}
+                  </div>
+                  {aiConfig?.hasKey ? (
+                    <div className="text-[9px] text-emerald-400 font-mono leading-none">
+                      {aiConfig.provider}: {aiConfig.daysRemaining}d
+                    </div>
+                  ) : (
+                    <div className="text-[9px] text-slate-500 font-mono leading-none">
+                      No API Key
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => logout()}
+                  className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition"
+                  title="Sign Off (Logout)"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => openAuthModal("signin")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign In</span>
+              </button>
+            )}
+
+            {/* Reset Project */}
             <button
               onClick={() => {
                 if (confirm("Reset current project to initial baseline?")) {
@@ -267,6 +327,7 @@ export const Navbar: React.FC = () => {
       {/* Modals */}
       <TemplatesModal isOpen={isTemplatesOpen} onClose={() => setIsTemplatesOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <AuthModal />
     </>
   );
 };
