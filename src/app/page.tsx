@@ -11,7 +11,7 @@ import { LoginLanding } from "@/components/login-landing";
 
 export default function Home() {
   const { activeTab } = useDocStore();
-  const { isAuthenticated, isLoading, checkSession } = useAuthStore();
+  const { user, isAuthenticated, isLoading, checkSession } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -23,12 +23,17 @@ export default function Home() {
       if (useAuthStore.getState().isLoading) {
         useAuthStore.setState({ isLoading: false });
       }
-    }, 4000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);
 
-  if (!mounted || isLoading) {
+  if (!mounted) {
+    return null;
+  }
+
+  // Only show initializing screen on initial cold boot before session status is determined
+  if (isLoading && !isAuthenticated && !user) {
     return (
       <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-slate-400 text-sm">
         <div className="flex items-center gap-3">

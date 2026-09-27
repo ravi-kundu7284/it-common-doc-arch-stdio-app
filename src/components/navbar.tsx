@@ -44,7 +44,6 @@ export const Navbar: React.FC = () => {
     isAuthenticated,
     logout,
     openAuthModal,
-    checkSession,
   } = useAuthStore();
 
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -52,11 +51,6 @@ export const Navbar: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Check user session on mount
-  useEffect(() => {
-    checkSession();
-  }, [checkSession]);
 
   // Close dropdown on outside click
   useEffect(() => {

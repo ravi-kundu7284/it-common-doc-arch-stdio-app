@@ -6,20 +6,20 @@ import { useAuthStore } from "@/store/use-auth-store";
 import { LoginLanding } from "@/components/login-landing";
 
 export default function LoginPage() {
-  const { isAuthenticated, isLoading, checkSession } = useAuthStore();
+  const { user, isAuthenticated, isLoading, checkSession } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
     checkSession();
-  }, [checkSession]);
+  }, []);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (isAuthenticated || user) {
       router.push("/");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, user, router]);
 
-  if (isLoading) {
+  if (isLoading && !isAuthenticated && !user) {
     return (
       <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-slate-400 text-sm">
         <div className="flex items-center gap-3">
