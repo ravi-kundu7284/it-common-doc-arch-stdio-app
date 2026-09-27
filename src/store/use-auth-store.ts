@@ -85,10 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkSession: async () => {
     try {
-      // Only trigger full-screen loading on initial cold boot when no user is loaded yet
-      if (!get().user) {
-        set({ isLoading: true });
-      }
+      set({ isLoading: true });
       const res = await fetch("/api/auth/me", { credentials: "include" });
       const data = await res.json();
 
@@ -138,12 +135,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: data.user,
         isAuthenticated: true,
-        isLoading: false,
         isAuthModalOpen: false,
       });
 
-      // Refresh session state in background to load AI config
-      get().checkSession();
+      // Refresh session state to load AI config
+      await get().checkSession();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
@@ -167,11 +163,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: data.user,
         isAuthenticated: true,
-        isLoading: false,
         isAuthModalOpen: false,
       });
 
-      get().checkSession();
+      await get().checkSession();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
