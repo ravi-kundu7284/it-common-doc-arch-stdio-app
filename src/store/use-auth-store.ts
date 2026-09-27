@@ -85,10 +85,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkSession: async () => {
     try {
-      set({ isLoading: true });
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      const data = await res.json();
+      // Only set isLoading: true on cold initial boot when no user is loaded
+      if (!get().isAuthenticated && !get().user) {
+        set({ isLoading: true });
+      }
 
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (!res.ok) {
+        set({
+          user: null,
+          aiConfig: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+        return;
+      }
+
+      const data = await res.json();
       if (data.authenticated && data.user) {
         set({
           user: data.user,
@@ -105,8 +118,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
       }
     } catch (err) {
-      console.error("Session check failed:", err);
-      set({ user: null, aiConfig: null, isAuthenticated: false, isLoading: false });
+      console.warn("Session check warning:", err);
+      // If we are already authenticated in memory, do not disrupt the user
+      if (!get().isAuthenticated) {
+        set({ user: null, aiConfig: null, isAuthenticated: false, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
     }
   },
 
@@ -135,11 +153,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: data.user,
         isAuthenticated: true,
+        isLoading: false,
         isAuthModalOpen: false,
       });
 
-      // Refresh session state to load AI config
-      await get().checkSession();
+      // Background refresh to load any existing AI configs without UI flash
+      fetch("/api/auth/me", { credentials: "include" })
+        .then((r) => r.json())
+        .then((meData) => {
+          if (meData.authenticated && meData.user) {
+            set({
+              user: meData.user,
+              aiConfig: meData.aiConfig || null,
+            });
+          }
+        })
+        .catch(() => {});
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
@@ -163,10 +193,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: data.user,
         isAuthenticated: true,
+        isLoading: false,
         isAuthModalOpen: false,
       });
 
-      await get().checkSession();
+      fetch("/api/auth/me", { credentials: "include" })
+        .then((r) => r.json())
+        .then((meData) => {
+          if (meData.authenticated && meData.user) {
+            set({
+              user: meData.user,
+              aiConfig: meData.aiConfig || null,
+            });
+          }
+        })
+        .catch(() => {});
+
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
