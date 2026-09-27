@@ -85,6 +85,8 @@ async function runTests() {
   console.log(`Testing database tables in '${schema}' schema...\n`);
 
   const tables = [
+    { name: "databasechangelog", description: "Liquibase migration history & changelog tracking" },
+    { name: "databasechangeloglock", description: "Liquibase concurrent migration lock" },
     { name: "app_users", description: "User accounts, passwords & designations" },
     { name: "user_sessions", description: "Active session tokens & tracking" },
     { name: "user_ai_configurations", description: "Encrypted AI provider configurations" },

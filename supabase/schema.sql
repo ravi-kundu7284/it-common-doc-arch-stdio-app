@@ -165,6 +165,68 @@ INSERT INTO dev.app_users (
 )
 ON CONFLICT (email) DO NOTHING;
 
--- 8. Refresh PostgREST schema cache immediately
+-- 8. Liquibase Database Changelog Tracking Tables
+CREATE TABLE IF NOT EXISTS dev.databasechangeloglock (
+    id INT NOT NULL,
+    locked BOOLEAN NOT NULL,
+    lockgranted TIMESTAMP WITHOUT TIME ZONE,
+    lockedby VARCHAR(255),
+    CONSTRAINT pk_databasechangeloglock PRIMARY KEY (id)
+);
+
+INSERT INTO dev.databasechangeloglock (id, locked) 
+VALUES (1, FALSE) 
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS dev.databasechangelog (
+    id VARCHAR(255) NOT NULL,
+    author VARCHAR(255) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    dateexecuted TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    orderexecuted INT NOT NULL,
+    exectype VARCHAR(10) NOT NULL,
+    md5sum VARCHAR(35),
+    description VARCHAR(255),
+    comments VARCHAR(255),
+    tag VARCHAR(255),
+    liquibase VARCHAR(20) DEFAULT '4.27.0',
+    contexts VARCHAR(255),
+    labels VARCHAR(255),
+    deployment_id VARCHAR(10)
+);
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '000-create-dev-schema', 'ravi.kundu', 'liquibase/changesets/000-create-dev-schema.sql', NOW(), 1, 'EXECUTED', 'sql', 'Create dev schema and grant permissions to Supabase API roles'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '000-create-dev-schema');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '001-create-app-users', 'ravi.kundu', 'liquibase/changesets/001-create-app-users.sql', NOW(), 2, 'EXECUTED', 'sql', 'Create app_users table with PBKDF2 hashed passwords and role support'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '001-create-app-users');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '002-create-user-ai-configs', 'ravi.kundu', 'liquibase/changesets/002-create-user-ai-configs.sql', NOW(), 3, 'EXECUTED', 'sql', 'Create user_ai_configurations table for encrypted API keys with auto-expiry'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '002-create-user-ai-configs');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '003-create-user-sessions', 'ravi.kundu', 'liquibase/changesets/003-create-user-sessions.sql', NOW(), 4, 'EXECUTED', 'sql', 'Create user_sessions table for active user session management and tracking'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '003-create-user-sessions');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '004-add-designation-and-lockout', 'ravi.kundu', 'liquibase/changesets/004-add-designation-and-lockout.sql', NOW(), 5, 'EXECUTED', 'sql', 'Add designation, failed login attempt tracking, and password reset tokens'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '004-add-designation-and-lockout');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '005-create-audit-logs', 'ravi.kundu', 'liquibase/changesets/005-create-audit-logs.sql', NOW(), 6, 'EXECUTED', 'sql', 'Create security and admin activity audit logs table'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '005-create-audit-logs');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '006-create-purge-procedure', 'ravi.kundu', 'liquibase/changesets/006-create-purge-procedure.sql', NOW(), 7, 'EXECUTED', 'sql', 'Stored procedure to auto-purge expired AI keys and expired user sessions'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '006-create-purge-procedure');
+
+INSERT INTO dev.databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, description, comments)
+SELECT '007-enable-rls-and-seed', 'ravi.kundu', 'liquibase/changesets/007-enable-rls-and-seed.sql', NOW(), 8, 'EXECUTED', 'sql', 'Enable RLS, create permissive policies, and seed initial architect and admin accounts'
+WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '007-enable-rls-and-seed');
+
+-- 9. Refresh PostgREST schema cache immediately
 NOTIFY pgrst, 'reload schema';
 

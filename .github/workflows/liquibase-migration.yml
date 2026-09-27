@@ -1,0 +1,46 @@
+name: Liquibase Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Liquibase command to run (update, status, validate)'
+        required: true
+        default: 'update'
+        type: choice
+        options:
+          - update
+          - status
+          - validate
+  push:
+    branches:
+      - main
+      - feature/intial-dev-arch-stdio
+    paths:
+      - 'liquibase/**'
+
+jobs:
+  liquibase-update:
+    name: Execute Liquibase Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Liquibase
+        uses: liquibase-github-actions/setup-liquibase@v1
+        with:
+          liquibaseVersion: '4.27.0'
+
+      - name: Run Liquibase in Dev Schema
+        run: |
+          liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            --changelog-file=liquibase/changelog.master.xml \
+            --url="${{ secrets.DATABASE_URL || 'jdbc:postgresql://db.ahyzrleofpdtfzrfsnbz.supabase.co:5432/postgres?sslmode=require' }}" \
+            --username="${{ secrets.DB_USER || 'postgres' }}" \
+            --password="${{ secrets.DB_PASSWORD || 'Arch101015' }}" \
+            --defaultSchemaName=dev \
+            --liquibaseSchemaName=dev \
+            ${{ github.event.inputs.command || 'update' }}

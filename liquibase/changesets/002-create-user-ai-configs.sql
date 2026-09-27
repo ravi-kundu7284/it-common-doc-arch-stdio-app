@@ -2,9 +2,9 @@
 -- changeset ravi.kundu:002-create-user-ai-configs
 -- comment: Create user_ai_configurations table for encrypted API keys with auto-expiry
 
-CREATE TABLE IF NOT EXISTS public.user_ai_configurations (
+CREATE TABLE IF NOT EXISTS user_ai_configurations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     provider VARCHAR(30) NOT NULL DEFAULT 'builtin',
     model_name VARCHAR(50) NOT NULL DEFAULT 'gemini-1.5-pro',
     encrypted_api_key TEXT,                          -- AES-256-GCM ciphertext
@@ -18,5 +18,5 @@ CREATE TABLE IF NOT EXISTS public.user_ai_configurations (
     CONSTRAINT unique_user_provider UNIQUE(user_id, provider)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ai_config_user ON public.user_ai_configurations(user_id);
-CREATE INDEX IF NOT EXISTS idx_ai_config_expiry ON public.user_ai_configurations(expires_at);
+CREATE INDEX IF NOT EXISTS idx_ai_config_user ON user_ai_configurations(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_config_expiry ON user_ai_configurations(expires_at);
