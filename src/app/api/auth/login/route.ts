@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbUpdateLastLogin, dbCreateSession, getLastDbError } from "@/lib/supabase";
+import {
+  dbFindUser,
+  dbRecordLoginSuccess,
+  dbGetUserAiConfig,
+  getLastDbError,
+} from "@/lib/supabase";
 import { verifyPassword, createSessionToken } from "@/lib/crypto";
 import {
   getClientIp,
   checkIpRateLimit,
   checkUserLockout,
   recordFailedLogin,
-  recordSuccessfulLogin,
 } from "@/lib/rate-limit";
 
 export const runtime = "edge";
@@ -102,11 +106,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Successful Login: Reset lockout counters and record audit
-    await recordSuccessfulLogin(user, ip, userAgent);
-    await dbUpdateLastLogin(user.id);
-
-    // 6. Generate Session Token & Track Active Session
+    // 5. Generate Session Token & Track Active Session
     const sessionToken = await createSessionToken({
       userId: user.id,
       username: user.username,
@@ -118,14 +118,44 @@ export async function POST(req: NextRequest) {
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    await dbCreateSession({
-      user_id: user.id,
-      session_token: sessionToken,
-      ip_address: ip,
-      user_agent: userAgent,
-      expires_at: expiresAt,
-      is_active: true,
-    });
+    // 6. Concurrently record login success and retrieve user's AI config
+    const [_, aiConfig] = await Promise.all([
+      dbRecordLoginSuccess(
+        user.id,
+        {
+          user_id: user.id,
+          session_token: sessionToken,
+          ip_address: ip,
+          user_agent: userAgent,
+          expires_at: expiresAt,
+          is_active: true,
+        },
+        {
+          user_id: user.id,
+          action: "LOGIN_SUCCESS",
+          details: `Successful login for @${user.username} (${user.designation || user.role}). IP: ${ip}`,
+          ip_address: ip,
+          user_agent: userAgent,
+        }
+      ),
+      dbGetUserAiConfig(user.id),
+    ]);
+
+    // Format AI config info if present
+    let formattedAiConfig = null;
+    if (aiConfig) {
+      const msLeft = aiConfig.expires_at ? new Date(aiConfig.expires_at).getTime() - Date.now() : 0;
+      formattedAiConfig = {
+        provider: aiConfig.provider,
+        modelName: aiConfig.model_name,
+        keyLast4: aiConfig.key_last4 || null,
+        hasKey: Boolean(aiConfig.encrypted_api_key),
+        expiresAt: aiConfig.expires_at || null,
+        expiresInDays: aiConfig.expires_in_days || 30,
+        daysRemaining: msLeft > 0 ? Math.ceil(msLeft / (1000 * 60 * 60 * 24)) : null,
+        isKeyActive: msLeft > 0,
+      };
+    }
 
     // 7. Sanitize user object for response
     const sanitized = {
@@ -142,6 +172,7 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "Sign in successful",
       user: sanitized,
+      aiConfig: formattedAiConfig,
     });
 
     // 8. Set secure HTTP-only session cookie

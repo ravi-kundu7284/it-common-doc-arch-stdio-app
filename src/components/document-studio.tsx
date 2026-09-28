@@ -146,6 +146,40 @@ const TEMPLATE_SUGGESTIONS = [
   },
 ];
 
+interface SectionPreviewCardProps {
+  section: {
+    id: string;
+    title: string;
+    contentMarkdown: string;
+    level?: string;
+  };
+  isActive: boolean;
+}
+
+const SectionPreviewCard = React.memo<SectionPreviewCardProps>(
+  ({ section, isActive }) => {
+    return (
+      <section
+        id={section.id}
+        className={`scroll-mt-12 transition-all p-4 rounded-2xl ${
+          isActive ? "ring-1 ring-indigo-500/40 bg-indigo-950/10" : ""
+        }`}
+      >
+        <MarkdownViewer content={section.contentMarkdown} />
+      </section>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.isActive === next.isActive &&
+      prev.section.id === next.section.id &&
+      prev.section.contentMarkdown === next.section.contentMarkdown &&
+      prev.section.title === next.section.title
+    );
+  }
+);
+SectionPreviewCard.displayName = "SectionPreviewCard";
+
 export const DocumentStudio: React.FC = () => {
   const {
     currentProject,
@@ -192,12 +226,30 @@ export const DocumentStudio: React.FC = () => {
   const [newSectionRefId, setNewSectionRefId] = useState<string>("");
   const [newSectionContent, setNewSectionContent] = useState("");
 
-  // Sync editor when active section changes
+  // Sync editor when active section changes (external or initial)
   useEffect(() => {
-    if (activeSection) {
+    if (activeSection && editorText !== activeSection.contentMarkdown) {
       setEditorText(activeSection.contentMarkdown);
     }
   }, [activeSection?.id]);
+
+  const handleSelectSection = (sectionId: string) => {
+    setSelectedSectionId(sectionId);
+    const target = documentSections.find((s) => s.id === sectionId);
+    if (target) {
+      setEditorText(target.contentMarkdown);
+    }
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setShowSectionList(false);
+    }
+    // Smooth scroll to target section in preview pane
+    requestAnimationFrame(() => {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  };
 
   // Sync section filter when design level is changed from Navbar or other triggers
   useEffect(() => {
@@ -618,12 +670,7 @@ export const DocumentStudio: React.FC = () => {
                 return (
                   <div
                     key={sec.id}
-                    onClick={() => {
-                      setSelectedSectionId(sec.id);
-                      if (typeof window !== "undefined" && window.innerWidth < 768) {
-                        setShowSectionList(false);
-                      }
-                    }}
+                    onClick={() => handleSelectSection(sec.id)}
                     className={`flex items-center justify-between p-2 rounded-lg cursor-pointer group text-xs transition ${
                       isSelected
                         ? "bg-indigo-600/20 border border-indigo-500/60 text-white font-medium"
@@ -931,6 +978,10 @@ export const DocumentStudio: React.FC = () => {
                     <a
                       key={sec.id}
                       href={`#${sec.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSelectSection(sec.id);
+                      }}
                       className="text-indigo-400 hover:text-indigo-200 truncate transition py-0.5 flex items-center gap-1.5"
                     >
                       <span className="text-slate-500 font-mono text-[10px]">{idx + 1}.</span>
@@ -949,17 +1000,11 @@ export const DocumentStudio: React.FC = () => {
             {/* Document Sections Content */}
             <div className="space-y-12">
               {documentSections.map((sec) => (
-                <section
+                <SectionPreviewCard
                   key={sec.id}
-                  id={sec.id}
-                  className={`scroll-mt-12 transition-all p-4 rounded-2xl ${
-                    sec.id === activeSection?.id
-                      ? "ring-1 ring-indigo-500/40 bg-indigo-950/10"
-                      : ""
-                  }`}
-                >
-                  <MarkdownViewer content={sec.contentMarkdown} />
-                </section>
+                  section={sec}
+                  isActive={sec.id === activeSection?.id}
+                />
               ))}
             </div>
 

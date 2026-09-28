@@ -9,10 +9,12 @@ interface MermaidRendererProps {
 }
 
 let mermaidInstance: any = null;
+const svgCache = new Map<string, string>();
 
-export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, className = "" }) => {
+export const MermaidRenderer: React.FC<MermaidRendererProps> = React.memo(({ chart, className = "" }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [svgHtml, setSvgHtml] = useState<string>("");
+  const cleanChart = chart ? chart.trim() : "";
+  const [svgHtml, setSvgHtml] = useState<string>(() => svgCache.get(cleanChart) || "");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -20,13 +22,20 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
   useEffect(() => {
     let isMounted = true;
 
-    const renderChart = async () => {
-      if (!chart || !chart.trim()) {
-        setSvgHtml("");
-        setError(null);
-        return;
-      }
+    if (!cleanChart) {
+      setSvgHtml("");
+      setError(null);
+      return;
+    }
 
+    // Instant cache hit
+    if (svgCache.has(cleanChart)) {
+      setSvgHtml(svgCache.get(cleanChart)!);
+      setError(null);
+      return;
+    }
+
+    const renderChart = async () => {
       // Generate unique ID per render call to prevent Mermaid ID collisions
       const renderId = `mermaid_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
@@ -51,8 +60,8 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
           });
         }
 
-        const cleanChart = chart.trim();
         const { svg } = await mermaidInstance.render(renderId, cleanChart);
+        svgCache.set(cleanChart, svg);
         if (isMounted) {
           setSvgHtml(svg);
           setError(null);
@@ -144,4 +153,4 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart, classNa
       </div>
     </div>
   );
-};
+});
