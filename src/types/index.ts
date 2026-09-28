@@ -11,6 +11,16 @@ export interface DocumentSection {
   mermaidDiagrams?: string[];
 }
 
+export interface SavedProjectSummary {
+  id: string;
+  title: string;
+  domain: string;
+  designLevel: DesignLevel;
+  lastUpdated: string;
+  sectionCount: number;
+  project: DesignDocProject;
+}
+
 export interface DesignDocProject {
   id: string;
   designLevel?: DesignLevel;

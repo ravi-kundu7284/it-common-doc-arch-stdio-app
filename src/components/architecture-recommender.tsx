@@ -121,7 +121,7 @@ export const ArchitectureRecommender: React.FC = () => {
     updateRecommendations({
       stack: stackSelection,
     });
-    regenerateDocumentSections();
+    regenerateDocumentSections(currentProject.designLevel || "hld");
     setActiveStep(3);
     setActiveTab("studio");
   };
@@ -134,12 +134,16 @@ export const ArchitectureRecommender: React.FC = () => {
           <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Module B &bull; Architectural Synthesis & Trade-off Engine</span>
+            <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950 border border-indigo-700/60 text-indigo-300">
+              {(currentProject.designLevel || "hld").toUpperCase()} TARGET
+            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             AI Architecture & Tech Stack Recommendations
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Based on <span className="text-indigo-300 font-semibold">{requirements.domain}</span> at{" "}
+            Project: <span className="text-white font-semibold">{currentProject.metadata.title}</span> &bull; Domain:{" "}
+            <span className="text-indigo-300 font-semibold">{requirements.domain}</span> at{" "}
             <span className="font-mono text-cyan-300 font-semibold">{requirements.targetScale.rps.toLocaleString()} RPS</span> &bull;{" "}
             SLA {requirements.nonFunctionalRequirements.availability}
           </p>
@@ -150,7 +154,7 @@ export const ArchitectureRecommender: React.FC = () => {
           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5"
         >
           <Sparkles className="w-4 h-4" />
-          <span>Compile Production Design Document</span>
+          <span>Compile {(currentProject.designLevel || "hld").toUpperCase()} Design Document</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

@@ -24,11 +24,13 @@ import {
   ShieldCheck,
   ShieldAlert,
   Clock,
+  FolderKanban,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
 import { TemplatesModal } from "./templates-modal";
 import { SettingsModal } from "./settings-modal";
 import { AuthModal } from "./auth-modal";
+import { ProjectsModal } from "./projects-modal";
 
 export const Navbar: React.FC = () => {
   const {
@@ -38,6 +40,8 @@ export const Navbar: React.FC = () => {
     resetProject,
     setDesignLevel,
     startBlankProject,
+    savedProjects,
+    lastSavedAt,
   } = useDocStore();
 
   const {
@@ -48,6 +52,7 @@ export const Navbar: React.FC = () => {
     openAuthModal,
   } = useAuthStore();
 
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -207,6 +212,21 @@ export const Navbar: React.FC = () => {
 
           {/* Utility Actions & User Auth */}
           <div className="flex items-center gap-2">
+            {/* My Projects & Drafts */}
+            <button
+              onClick={() => setIsProjectsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Open My Projects & Drafts"
+            >
+              <FolderKanban className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Projects</span>
+              {savedProjects.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 font-bold">
+                  {savedProjects.length}
+                </span>
+              )}
+            </button>
+
             {/* Templates Library */}
             <button
               onClick={() => setIsTemplatesOpen(true)}
@@ -366,6 +386,7 @@ export const Navbar: React.FC = () => {
       </header>
 
       {/* Modals */}
+      <ProjectsModal isOpen={isProjectsOpen} onClose={() => setIsProjectsOpen(false)} />
       <TemplatesModal isOpen={isTemplatesOpen} onClose={() => setIsTemplatesOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <AuthModal />

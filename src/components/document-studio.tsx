@@ -28,8 +28,10 @@ import {
   ArrowDown,
   CornerDownRight,
   Filter,
+  FolderKanban,
 } from "lucide-react";
 import { generateStandaloneHtml, generateRawMarkdown, downloadFile } from "@/lib/export-engine";
+import { ProjectsModal } from "./projects-modal";
 
 const SAMPLE_DIAGRAM_SNIPPETS = {
   sequence: `\`\`\`mermaid
@@ -160,6 +162,9 @@ export const DocumentStudio: React.FC = () => {
     setStudioViewMode,
     updateMetadata,
     apiSettings,
+    savedProjects,
+    lastSavedAt,
+    saveCurrentProjectToDrafts,
   } = useDocStore();
 
   const { metadata, requirements, recommendations, documentSections, designLevel = "hld" } = currentProject;
@@ -171,6 +176,10 @@ export const DocumentStudio: React.FC = () => {
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
+
+  // Projects Modal & Auto-save feedback state
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
 
   // Section Filter: "all" | "hld" | "lld"
   const [sectionFilter, setSectionFilter] = useState<"all" | "hld" | "lld">("all");
@@ -430,6 +439,35 @@ export const DocumentStudio: React.FC = () => {
             >
               <Code2 className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Editor</span>
+            </button>
+          </div>
+
+          {/* Drafts & Projects Manager */}
+          <div className="flex items-center gap-1.5 border-r border-slate-800 pr-2">
+            <button
+              onClick={() => setIsProjectsModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Open My Projects & Drafts (Continue where you left off or start new)"
+            >
+              <FolderKanban className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Drafts</span>
+              {savedProjects.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-indigo-300 font-bold">
+                  {savedProjects.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                saveCurrentProjectToDrafts();
+                setDraftSavedFeedback(true);
+                setTimeout(() => setDraftSavedFeedback(false), 1500);
+              }}
+              className="hidden lg:flex items-center gap-1 px-2 py-1 rounded bg-slate-950/60 border border-slate-800 text-[11px] text-slate-400 hover:text-slate-200 transition"
+              title="Click to manually snapshot current draft (auto-save is active)"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{draftSavedFeedback ? "Saved!" : `Autosaved ${lastSavedAt || "live"}`}</span>
             </button>
           </div>
 
@@ -1046,6 +1084,12 @@ export const DocumentStudio: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Projects and Drafts Modal */}
+      <ProjectsModal
+        isOpen={isProjectsModalOpen}
+        onClose={() => setIsProjectsModalOpen(false)}
+      />
     </div>
   );
 };

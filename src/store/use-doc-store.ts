@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { DesignDocProject, DocumentSection, DesignLevel } from "@/types";
+import { DesignDocProject, DocumentSection, DesignLevel, SavedProjectSummary } from "@/types";
 import { PRESET_TEMPLATES, ARCHITECTURE_PATTERNS } from "@/lib/templates";
 import { generateStandardDocument, syncTitleAcrossSections } from "@/lib/doc-generator";
 
 interface DocState {
   currentProject: DesignDocProject;
+  savedProjects: SavedProjectSummary[];
+  lastSavedAt: string;
   activeStep: number;
   activeTab: "wizard" | "recommender" | "studio" | "templates";
   studioViewMode: "split" | "preview" | "editor";
@@ -56,6 +58,13 @@ interface DocState {
   regenerateDocumentSections: (level?: DesignLevel) => void;
   resetProject: () => void;
   startBlankProject: (title?: string, domain?: string, level?: DesignLevel) => void;
+
+  // Multi-Project / Drafts Management
+  saveCurrentProjectToDrafts: () => void;
+  loadSavedProject: (projectId: string) => void;
+  deleteSavedProject: (projectId: string) => void;
+  duplicateSavedProject: (projectId: string) => void;
+  createNewProject: (title?: string, domain?: string, level?: DesignLevel) => void;
 }
 
 export const createBlankProject = (
@@ -147,10 +156,16 @@ const createInitialProject = (): DesignDocProject => {
   };
 };
 
+function formatNow(): string {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 export const useDocStore = create<DocState>()(
   persist(
     (set, get) => ({
       currentProject: createInitialProject(),
+      savedProjects: [],
+      lastSavedAt: formatNow(),
       activeStep: 1,
       activeTab: "wizard",
       studioViewMode: "split",
@@ -163,6 +178,103 @@ export const useDocStore = create<DocState>()(
         modelName: "gemini-1.5-pro",
       },
       customTemplates: [],
+
+      // Save/Upsert Current Project into Drafts List
+      saveCurrentProjectToDrafts: () => {
+        const { currentProject, savedProjects } = get();
+        const existingIdx = savedProjects.findIndex((p) => p.id === currentProject.id);
+
+        const summary: SavedProjectSummary = {
+          id: currentProject.id,
+          title: currentProject.metadata.title,
+          domain: currentProject.requirements.domain,
+          designLevel: currentProject.designLevel || "hld",
+          lastUpdated: new Date().toLocaleString(),
+          sectionCount: currentProject.documentSections.length,
+          project: JSON.parse(JSON.stringify(currentProject)),
+        };
+
+        let updatedList: SavedProjectSummary[] = [];
+        if (existingIdx >= 0) {
+          updatedList = [...savedProjects];
+          updatedList[existingIdx] = summary;
+        } else {
+          updatedList = [summary, ...savedProjects];
+        }
+
+        set({
+          savedProjects: updatedList,
+          lastSavedAt: formatNow(),
+        });
+      },
+
+      loadSavedProject: (projectId) => {
+        const { savedProjects } = get();
+        const found = savedProjects.find((p) => p.id === projectId);
+        if (!found) return;
+
+        set({
+          currentProject: JSON.parse(JSON.stringify(found.project)),
+          selectedSectionId: found.project.documentSections[0]?.id || null,
+          activeTab: "studio",
+          lastSavedAt: formatNow(),
+        });
+      },
+
+      deleteSavedProject: (projectId) => {
+        set((state) => ({
+          savedProjects: state.savedProjects.filter((p) => p.id !== projectId),
+        }));
+      },
+
+      duplicateSavedProject: (projectId) => {
+        const { savedProjects } = get();
+        const found = savedProjects.find((p) => p.id === projectId);
+        if (!found) return;
+
+        const newId = "proj_" + Math.random().toString(36).substring(2, 9);
+        const clonedProject: DesignDocProject = {
+          ...JSON.parse(JSON.stringify(found.project)),
+          id: newId,
+          metadata: {
+            ...found.project.metadata,
+            title: `${found.project.metadata.title} (Copy)`,
+            lastUpdated: new Date().toISOString().split("T")[0],
+          },
+        };
+
+        const clonedSummary: SavedProjectSummary = {
+          id: newId,
+          title: clonedProject.metadata.title,
+          domain: clonedProject.requirements.domain,
+          designLevel: clonedProject.designLevel || "hld",
+          lastUpdated: new Date().toLocaleString(),
+          sectionCount: clonedProject.documentSections.length,
+          project: clonedProject,
+        };
+
+        set((state) => ({
+          savedProjects: [clonedSummary, ...state.savedProjects],
+        }));
+      },
+
+      createNewProject: (title, domain, level = "hld") => {
+        // Auto-save current project before starting fresh
+        get().saveCurrentProjectToDrafts();
+
+        const fresh = createBlankProject(title, domain, level);
+        set({
+          currentProject: fresh,
+          activeStep: 1,
+          activeTab: "wizard",
+          selectedSectionId: fresh.documentSections[0]?.id || null,
+          selectedSectionIds: [],
+          lastSavedAt: formatNow(),
+        });
+
+        // Add the new project to drafts
+        get().saveCurrentProjectToDrafts();
+      },
 
       setDesignLevel: (level, regenerate = false) => {
         set((state) => {
@@ -179,16 +291,18 @@ export const useDocStore = create<DocState>()(
                 documentSections: newSections,
               },
               selectedSectionId: newSections[0]?.id || null,
+              lastSavedAt: formatNow(),
             };
           }
 
-          return { currentProject: updatedProject };
+          return { currentProject: updatedProject, lastSavedAt: formatNow() };
         });
       },
 
       setProject: (partial) =>
         set((state) => ({
           currentProject: { ...state.currentProject, ...partial },
+          lastSavedAt: formatNow(),
         })),
 
       updateMetadata: (metadata) =>
@@ -198,20 +312,22 @@ export const useDocStore = create<DocState>()(
 
           let updatedSections = state.currentProject.documentSections;
           if (newTitle && newTitle.trim() && newTitle !== prevTitle) {
-            // Automatically propagate project title update across all document sections
             updatedSections = syncTitleAcrossSections(updatedSections, prevTitle, newTitle.trim());
           }
 
-          return {
-            currentProject: {
-              ...state.currentProject,
-              metadata: {
-                ...state.currentProject.metadata,
-                ...metadata,
-                lastUpdated: new Date().toISOString().split("T")[0],
-              },
-              documentSections: updatedSections,
+          const updatedProject = {
+            ...state.currentProject,
+            metadata: {
+              ...state.currentProject.metadata,
+              ...metadata,
+              lastUpdated: new Date().toISOString().split("T")[0],
             },
+            documentSections: updatedSections,
+          };
+
+          return {
+            currentProject: updatedProject,
+            lastSavedAt: formatNow(),
           };
         }),
 
@@ -224,6 +340,7 @@ export const useDocStore = create<DocState>()(
               ...reqs,
             },
           },
+          lastSavedAt: formatNow(),
         })),
 
       updateRecommendations: (recs) =>
@@ -235,6 +352,7 @@ export const useDocStore = create<DocState>()(
               ...recs,
             },
           },
+          lastSavedAt: formatNow(),
         })),
 
       updateSectionContent: (id, contentMarkdown) =>
@@ -245,6 +363,7 @@ export const useDocStore = create<DocState>()(
               sec.id === id ? { ...sec, contentMarkdown } : sec
             ),
           },
+          lastSavedAt: formatNow(),
         })),
 
       updateSectionTitle: (id, title) =>
@@ -255,6 +374,7 @@ export const useDocStore = create<DocState>()(
               sec.id === id ? { ...sec, title } : sec
             ),
           },
+          lastSavedAt: formatNow(),
         })),
 
       reorderSections: (newSections) =>
@@ -263,6 +383,7 @@ export const useDocStore = create<DocState>()(
             ...state.currentProject,
             documentSections: newSections,
           },
+          lastSavedAt: formatNow(),
         })),
 
       addSection: (
@@ -307,7 +428,6 @@ export const useDocStore = create<DocState>()(
               updatedSections = [...currentSections, newSection];
             }
           } else {
-            // Default "end"
             updatedSections = [...currentSections, newSection];
           }
 
@@ -318,6 +438,7 @@ export const useDocStore = create<DocState>()(
             },
             selectedSectionId: newId,
             selectedSectionIds: [...state.selectedSectionIds, newId],
+            lastSavedAt: formatNow(),
           };
         }),
 
@@ -332,6 +453,7 @@ export const useDocStore = create<DocState>()(
             selectedSectionIds: state.selectedSectionIds.filter((sId) => sId !== id),
             selectedSectionId:
               state.selectedSectionId === id ? remaining[0]?.id || null : state.selectedSectionId,
+            lastSavedAt: formatNow(),
           };
         }),
 
@@ -375,6 +497,7 @@ export const useDocStore = create<DocState>()(
           selectedSectionIds: [],
           activeStep: 1,
           activeTab: "wizard",
+          lastSavedAt: formatNow(),
         });
       },
 
@@ -386,6 +509,7 @@ export const useDocStore = create<DocState>()(
           activeTab: "wizard",
           selectedSectionId: fresh.documentSections[0]?.id || null,
           selectedSectionIds: [],
+          lastSavedAt: formatNow(),
         });
       },
 
@@ -401,6 +525,7 @@ export const useDocStore = create<DocState>()(
               project: JSON.parse(JSON.stringify(state.currentProject)),
             },
           ],
+          lastSavedAt: formatNow(),
         })),
 
       deleteCustomTemplate: (templateId) =>
@@ -437,6 +562,7 @@ export const useDocStore = create<DocState>()(
             documentSections: newSections,
           },
           selectedSectionId: newSections[0]?.id || null,
+          lastSavedAt: formatNow(),
         }));
       },
 
@@ -448,6 +574,7 @@ export const useDocStore = create<DocState>()(
           activeTab: "wizard",
           selectedSectionId: fresh.documentSections[0]?.id || null,
           selectedSectionIds: [],
+          lastSavedAt: formatNow(),
         });
       },
     }),
@@ -455,8 +582,14 @@ export const useDocStore = create<DocState>()(
       name: "docarch-ai-storage-v1",
       partialize: (state) => ({
         currentProject: state.currentProject,
+        savedProjects: state.savedProjects,
+        activeTab: state.activeTab,
+        activeStep: state.activeStep,
+        selectedSectionId: state.selectedSectionId,
+        studioViewMode: state.studioViewMode,
         customTemplates: state.customTemplates,
         apiSettings: state.apiSettings,
+        lastSavedAt: state.lastSavedAt,
       }),
     }
   )
