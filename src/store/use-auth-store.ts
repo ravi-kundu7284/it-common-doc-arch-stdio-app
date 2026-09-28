@@ -74,6 +74,9 @@ interface AuthState {
   closeAuthModal: () => void;
 }
 
+let checkSessionPromise: Promise<void> | null = null;
+let lastSessionCheckTimestamp = 0;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   aiConfig: null,
@@ -84,48 +87,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   activeResetToken: null,
 
   checkSession: async () => {
-    try {
-      // Only set isLoading: true on cold initial boot when no user is loaded
-      if (!get().isAuthenticated && !get().user) {
-        set({ isLoading: true });
-      }
-
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      if (!res.ok) {
-        set({
-          user: null,
-          aiConfig: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-        return;
-      }
-
-      const data = await res.json();
-      if (data.authenticated && data.user) {
-        set({
-          user: data.user,
-          aiConfig: data.aiConfig || null,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } else {
-        set({
-          user: null,
-          aiConfig: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-      }
-    } catch (err) {
-      console.warn("Session check warning:", err);
-      // If we are already authenticated in memory, do not disrupt the user
-      if (!get().isAuthenticated) {
-        set({ user: null, aiConfig: null, isAuthenticated: false, isLoading: false });
-      } else {
-        set({ isLoading: false });
-      }
+    // 1. If a session check is currently in flight, reuse the promise
+    if (checkSessionPromise) {
+      return checkSessionPromise;
     }
+
+    // 2. Throttle: If session was verified within the last 15 seconds, avoid repeated network round-trips
+    const now = Date.now();
+    if (get().isAuthenticated && get().user && now - lastSessionCheckTimestamp < 15000) {
+      return;
+    }
+
+    checkSessionPromise = (async () => {
+      try {
+        if (!get().isAuthenticated && !get().user) {
+          set({ isLoading: true });
+        }
+
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        lastSessionCheckTimestamp = Date.now();
+
+        if (!res.ok) {
+          set({
+            user: null,
+            aiConfig: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+          return;
+        }
+
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          set({
+            user: data.user,
+            aiConfig: data.aiConfig || null,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } else {
+          set({
+            user: null,
+            aiConfig: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
+      } catch (err) {
+        console.warn("Session check warning:", err);
+        if (!get().isAuthenticated) {
+          set({ user: null, aiConfig: null, isAuthenticated: false, isLoading: false });
+        } else {
+          set({ isLoading: false });
+        }
+      } finally {
+        checkSessionPromise = null;
+      }
+    })();
+
+    return checkSessionPromise;
   },
 
   login: async (identifier, password) => {
@@ -150,25 +170,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
       }
 
+      lastSessionCheckTimestamp = Date.now();
+
       set({
         user: data.user,
+        aiConfig: data.aiConfig || null,
         isAuthenticated: true,
         isLoading: false,
         isAuthModalOpen: false,
       });
-
-      // Background refresh to load any existing AI configs without UI flash
-      fetch("/api/auth/me", { credentials: "include" })
-        .then((r) => r.json())
-        .then((meData) => {
-          if (meData.authenticated && meData.user) {
-            set({
-              user: meData.user,
-              aiConfig: meData.aiConfig || null,
-            });
-          }
-        })
-        .catch(() => {});
 
       return { success: true };
     } catch (err: any) {
@@ -190,24 +200,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { success: false, error: data.error || "Registration failed" };
       }
 
+      lastSessionCheckTimestamp = Date.now();
+
       set({
         user: data.user,
+        aiConfig: null,
         isAuthenticated: true,
         isLoading: false,
         isAuthModalOpen: false,
       });
-
-      fetch("/api/auth/me", { credentials: "include" })
-        .then((r) => r.json())
-        .then((meData) => {
-          if (meData.authenticated && meData.user) {
-            set({
-              user: meData.user,
-              aiConfig: meData.aiConfig || null,
-            });
-          }
-        })
-        .catch(() => {});
 
       return { success: true };
     } catch (err: any) {

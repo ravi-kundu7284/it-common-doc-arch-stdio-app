@@ -377,7 +377,7 @@ export const LoginLanding: React.FC = () => {
                   </div>
                   <div className="mt-1 text-[10px] text-slate-400 flex items-center justify-between">
                     <span>3 failed attempts = 2m lockout</span>
-                    <span>Max 5 attempts/min</span>
+                    <span>Max 3 attempts/min</span>
                   </div>
                 </div>
 

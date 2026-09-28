@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbFindUser, dbCreateUser, dbCreateSession, getLastDbError } from "@/lib/supabase";
+import {
+  dbFindUser,
+  dbCreateUser,
+  dbCreateSession,
+  dbRecordAuditLog,
+  getLastDbError,
+} from "@/lib/supabase";
 import { hashPassword, createSessionToken } from "@/lib/crypto";
 import { getClientIp } from "@/lib/rate-limit";
 
@@ -38,16 +44,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check existing
-    const existing = await dbFindUser(email);
-    if (existing) {
+    // Concurrently check if email or username already exists
+    const [existingEmail, existingUser] = await Promise.all([
+      dbFindUser(email),
+      dbFindUser(username),
+    ]);
+
+    if (existingEmail) {
       return NextResponse.json(
         { success: false, error: "An account with this email already exists" },
         { status: 409 }
       );
     }
 
-    const existingUser = await dbFindUser(username);
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: "Username is already taken" },
@@ -90,14 +99,24 @@ export async function POST(req: NextRequest) {
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    await dbCreateSession({
-      user_id: newUser.id,
-      session_token: sessionToken,
-      ip_address: ip,
-      user_agent: userAgent,
-      expires_at: expiresAt,
-      is_active: true,
-    });
+    // Concurrently create session and record audit log
+    await Promise.allSettled([
+      dbCreateSession({
+        user_id: newUser.id,
+        session_token: sessionToken,
+        ip_address: ip,
+        user_agent: userAgent,
+        expires_at: expiresAt,
+        is_active: true,
+      }),
+      dbRecordAuditLog({
+        user_id: newUser.id,
+        action: "USER_REGISTERED",
+        details: `Account registered for @${newUser.username} (${newUser.email})`,
+        ip_address: ip,
+        user_agent: userAgent,
+      }),
+    ]);
 
     // Sanitize response
     const sanitized = {

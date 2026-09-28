@@ -505,9 +505,6 @@ export async function dbFindUser(identifier: string): Promise<AppUser | null> {
     return sandboxDb.findUserByEmailOrUsername(identifier);
   }
 
-  // Ensure seed accounts exist if this is the first query
-  await dbEnsureSeedUsers(client);
-
   const clean = identifier.toLowerCase().trim();
   const { data, error } = await client
     .from("app_users")
@@ -520,7 +517,77 @@ export async function dbFindUser(identifier: string): Promise<AppUser | null> {
     console.error("Supabase user search error:", error);
     return sandboxDb.findUserByEmailOrUsername(identifier);
   }
-  return data as AppUser | null;
+
+  if (data) {
+    return data as AppUser;
+  }
+
+  // Only check seed accounts if user was not found and check hasn't run yet
+  if (!seedCheckAttempted) {
+    await dbEnsureSeedUsers(client);
+    const { data: retryData } = await client
+      .from("app_users")
+      .select("*")
+      .or(`email.eq.${clean},username.eq.${clean}`)
+      .maybeSingle();
+    if (retryData) return retryData as AppUser;
+  }
+
+  return sandboxDb.findUserByEmailOrUsername(identifier);
+}
+
+/**
+ * High-performance parallelized login recorder:
+ * Concurrently updates user last_login/lockout, creates session, and records audit log.
+ */
+export async function dbRecordLoginSuccess(
+  userId: string,
+  session: Omit<UserSession, "id" | "created_at">,
+  auditLog: Omit<SecurityAuditLog, "id" | "created_at">
+): Promise<void> {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+
+  // Update in-memory sandbox
+  sandboxDb.updateLockout(userId, 0, null);
+  sandboxDb.updateLastLogin(userId);
+  sandboxDb.createSession(session);
+  sandboxDb.recordAudit(auditLog);
+
+  if (client) {
+    await Promise.allSettled([
+      client
+        .from("app_users")
+        .update({
+          failed_login_attempts: 0,
+          locked_until: null,
+          last_login_at: now,
+        })
+        .eq("id", userId),
+
+      client.from("app_sessions").insert([
+        {
+          user_id: session.user_id,
+          session_token: session.session_token,
+          ip_address: session.ip_address || "127.0.0.1",
+          user_agent: session.user_agent || "Unknown Client",
+          expires_at: session.expires_at,
+          is_active: true,
+          last_accessed_at: now,
+        },
+      ]),
+
+      client.from("security_audit_logs").insert([
+        {
+          user_id: auditLog.user_id,
+          action: auditLog.action,
+          details: auditLog.details,
+          ip_address: auditLog.ip_address || "127.0.0.1",
+          user_agent: auditLog.user_agent || "Unknown Client",
+        },
+      ]),
+    ]);
+  }
 }
 
 export async function dbFindUserById(id: string): Promise<AppUser | null> {

@@ -146,6 +146,40 @@ const TEMPLATE_SUGGESTIONS = [
   },
 ];
 
+interface SectionPreviewCardProps {
+  section: {
+    id: string;
+    title: string;
+    contentMarkdown: string;
+    level?: string;
+  };
+  isActive: boolean;
+}
+
+const SectionPreviewCard = React.memo<SectionPreviewCardProps>(
+  ({ section, isActive }) => {
+    return (
+      <section
+        id={section.id}
+        className={`scroll-mt-12 transition-all p-4 rounded-2xl ${
+          isActive ? "ring-1 ring-indigo-500/40 bg-indigo-950/10" : ""
+        }`}
+      >
+        <MarkdownViewer content={section.contentMarkdown} />
+      </section>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.isActive === next.isActive &&
+      prev.section.id === next.section.id &&
+      prev.section.contentMarkdown === next.section.contentMarkdown &&
+      prev.section.title === next.section.title
+    );
+  }
+);
+SectionPreviewCard.displayName = "SectionPreviewCard";
+
 export const DocumentStudio: React.FC = () => {
   const {
     currentProject,
@@ -192,12 +226,41 @@ export const DocumentStudio: React.FC = () => {
   const [newSectionRefId, setNewSectionRefId] = useState<string>("");
   const [newSectionContent, setNewSectionContent] = useState("");
 
-  // Sync editor when active section changes
+  // Sync editor when active section changes (external or initial)
   useEffect(() => {
-    if (activeSection) {
+    if (activeSection && editorText !== activeSection.contentMarkdown) {
       setEditorText(activeSection.contentMarkdown);
     }
   }, [activeSection?.id]);
+
+  const handleSelectSection = (sectionId: string) => {
+    setSelectedSectionId(sectionId);
+    const target = documentSections.find((s) => s.id === sectionId);
+    if (target) {
+      setEditorText(target.contentMarkdown);
+    }
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setShowSectionList(false);
+    }
+    // Smooth scroll to target section in preview pane
+    requestAnimationFrame(() => {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  };
+
+  // Sync section filter when design level is changed from Navbar or other triggers
+  useEffect(() => {
+    if (designLevel === "hld") {
+      setSectionFilter("hld");
+    } else if (designLevel === "lld") {
+      setSectionFilter("lld");
+    } else {
+      setSectionFilter("all");
+    }
+  }, [designLevel]);
 
   const handleEditorChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -329,7 +392,7 @@ export const DocumentStudio: React.FC = () => {
               value={metadata.title}
               onChange={(e) => updateMetadata({ title: e.target.value })}
               title="Click to edit document title (automatically synchronizes across all sections)"
-              className="bg-transparent border-b border-dashed border-slate-700 hover:border-slate-500 focus:border-indigo-500 px-1 py-0.5 font-bold text-slate-200 text-xs w-52 sm:w-72 truncate focus:outline-none"
+              className="bg-transparent border-b border-dashed border-slate-700 hover:border-slate-500 focus:border-indigo-500 px-1 py-0.5 font-bold text-slate-200 text-xs w-28 sm:w-52 md:w-72 truncate focus:outline-none"
             />
           </div>
 
@@ -493,24 +556,41 @@ export const DocumentStudio: React.FC = () => {
       </div>
 
       {/* Main Studio Body */}
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* SIDEBAR: Sections List (Collapsible) */}
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden relative pb-14 md:pb-0">
+        {/* Mobile Backdrop Overlay */}
         {showSectionList && (
-          <aside className="w-72 sm:w-80 bg-slate-900/70 border-r border-slate-800 flex flex-col shrink-0">
+          <div
+            onClick={() => setShowSectionList(false)}
+            className="fixed inset-0 z-20 bg-black/60 backdrop-blur-xs md:hidden"
+          />
+        )}
+
+        {/* SIDEBAR: Sections List (Collapsible on Desktop, Off-canvas Drawer on Mobile) */}
+        {showSectionList && (
+          <aside className="fixed inset-y-16 left-0 z-30 w-72 sm:w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 shadow-2xl md:relative md:inset-y-0 md:z-auto md:shadow-none md:bg-slate-900/70">
             {/* Sidebar Top: Section Filter and Add Button */}
             <div className="p-2.5 border-b border-slate-800 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold uppercase tracking-wider text-slate-400 text-[11px]">
                   Document Sections ({documentSections.length})
                 </span>
-                <button
-                  onClick={() => openAddModal("end")}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold border border-indigo-500/30 transition"
-                  title="Add New Custom Section (Start, Mid, or End)"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Section</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openAddModal("end")}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold border border-indigo-500/30 transition"
+                    title="Add New Custom Section (Start, Mid, or End)"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add</span>
+                  </button>
+                  <button
+                    onClick={() => setShowSectionList(false)}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 md:hidden"
+                    title="Close Sidebar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Filter Tabs */}
@@ -590,7 +670,7 @@ export const DocumentStudio: React.FC = () => {
                 return (
                   <div
                     key={sec.id}
-                    onClick={() => setSelectedSectionId(sec.id)}
+                    onClick={() => handleSelectSection(sec.id)}
                     className={`flex items-center justify-between p-2 rounded-lg cursor-pointer group text-xs transition ${
                       isSelected
                         ? "bg-indigo-600/20 border border-indigo-500/60 text-white font-medium"
@@ -706,7 +786,7 @@ export const DocumentStudio: React.FC = () => {
         {studioViewMode !== "preview" && (
           <div
             className={`flex flex-col bg-slate-950 border-r border-slate-800 ${
-              studioViewMode === "split" ? "w-1/2 flex-1" : "w-full flex-1"
+              studioViewMode === "split" ? "w-full lg:w-1/2 flex-1 min-h-[50vh] lg:min-h-0" : "w-full flex-1"
             }`}
           >
             {/* Editor Sub-header & Snippet Tools */}
@@ -822,8 +902,12 @@ export const DocumentStudio: React.FC = () => {
         {/* RIGHT / MAIN: Live HTML Document Preview with Mermaid */}
         {studioViewMode !== "editor" && (
           <div
-            className={`flex-1 overflow-y-auto p-6 sm:p-10 bg-slate-950 transition-all ${
-              studioViewMode === "preview" ? "max-w-5xl mx-auto w-full" : ""
+            className={`flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 bg-slate-950 transition-all ${
+              studioViewMode === "preview"
+                ? "max-w-5xl mx-auto w-full"
+                : studioViewMode === "split"
+                ? "w-full lg:w-1/2 min-h-[50vh] lg:min-h-0"
+                : ""
             }`}
           >
             {/* Document Header Card */}
@@ -894,6 +978,10 @@ export const DocumentStudio: React.FC = () => {
                     <a
                       key={sec.id}
                       href={`#${sec.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSelectSection(sec.id);
+                      }}
                       className="text-indigo-400 hover:text-indigo-200 truncate transition py-0.5 flex items-center gap-1.5"
                     >
                       <span className="text-slate-500 font-mono text-[10px]">{idx + 1}.</span>
@@ -912,17 +1000,11 @@ export const DocumentStudio: React.FC = () => {
             {/* Document Sections Content */}
             <div className="space-y-12">
               {documentSections.map((sec) => (
-                <section
+                <SectionPreviewCard
                   key={sec.id}
-                  id={sec.id}
-                  className={`scroll-mt-12 transition-all p-4 rounded-2xl ${
-                    sec.id === activeSection?.id
-                      ? "ring-1 ring-indigo-500/40 bg-indigo-950/10"
-                      : ""
-                  }`}
-                >
-                  <MarkdownViewer content={sec.contentMarkdown} />
-                </section>
+                  section={sec}
+                  isActive={sec.id === activeSection?.id}
+                />
               ))}
             </div>
 
