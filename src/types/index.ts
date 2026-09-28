@@ -1,7 +1,19 @@
 import { z } from "zod";
 
+export type DesignLevel = "hld" | "lld" | "full";
+
+export interface DocumentSection {
+  id: string;
+  title: string;
+  contentMarkdown: string;
+  level?: "hld" | "lld" | "common";
+  phase?: string;
+  mermaidDiagrams?: string[];
+}
+
 export interface DesignDocProject {
   id: string;
+  designLevel?: DesignLevel;
   metadata: {
     title: string;
     version: string;
@@ -39,12 +51,7 @@ export interface DesignDocProject {
       devops: string;
     };
   };
-  documentSections: {
-    id: string;
-    title: string;
-    contentMarkdown: string;
-    mermaidDiagrams?: string[];
-  }[];
+  documentSections: DocumentSection[];
 }
 
 export interface ArchitecturePatternInfo {

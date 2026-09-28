@@ -53,7 +53,14 @@ export const RequirementsWizard: React.FC = () => {
     setActiveTab,
     setActiveStep,
     loadPresetTemplate,
+    startBlankProject,
+    setDesignLevel,
+    regenerateDocumentSections,
   } = useDocStore();
+
+  const [selectedLevel, setSelectedLevel] = useState<"hld" | "lld" | "full">(
+    currentProject.designLevel || "hld"
+  );
 
   const [stepIndex, setStepIndex] = useState(1);
   const [selectedCompliance, setSelectedCompliance] = useState<string[]>(
@@ -117,6 +124,26 @@ export const RequirementsWizard: React.FC = () => {
     setValue("functionalRequirements", next.join("\n"));
   };
 
+  const handleStartBlank = () => {
+    startBlankProject("Custom Architecture Project", "Enterprise Software", selectedLevel);
+    setValue("title", "Custom Architecture Project");
+    setValue("domain", "Enterprise Software");
+    setValue("rps", 5000);
+    setValue("users", "1,000,000 MAU");
+    setValue("dataRetention", "3 Years");
+    setValue("latency", "p99 < 150ms");
+    setValue("availability", "99.95%");
+    setSelectedCompliance(["SOC2 Type II", "ISO 27001"]);
+    setValue("compliance", ["SOC2 Type II", "ISO 27001"]);
+    const blankFeatures = [
+      "Secure client authentication and access control",
+      "Core domain transactional processing with idempotency",
+    ];
+    setFunctionalList(blankFeatures);
+    setValue("functionalRequirements", blankFeatures.join("\n"));
+    setValue("constraints", "Zero single points of failure");
+  };
+
   const onSubmit = (data: RequirementsFormData) => {
     updateMetadata({
       title: data.title,
@@ -139,6 +166,9 @@ export const RequirementsWizard: React.FC = () => {
         : [],
     });
 
+    setDesignLevel(selectedLevel);
+    regenerateDocumentSections(selectedLevel);
+
     setActiveStep(2);
     setActiveTab("recommender");
   };
@@ -146,7 +176,7 @@ export const RequirementsWizard: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
       {/* Hero Banner & Presets Bar */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
@@ -161,15 +191,23 @@ export const RequirementsWizard: React.FC = () => {
             </p>
           </div>
 
-          {/* Quick preset selector */}
+          {/* Quick preset selector & Start Blank button */}
           <div className="flex flex-wrap items-center gap-1.5 self-start md:self-center">
-            <span className="text-[11px] text-slate-400 mr-1 font-medium">Quick Presets:</span>
+            <button
+              type="button"
+              onClick={handleStartBlank}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600/30 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white text-indigo-300 transition shadow"
+              title="Start with a blank project without any demo data"
+            >
+              + Blank Architecture (No Demo Data)
+            </button>
+            <span className="text-[11px] text-slate-400 mx-1 font-medium hidden sm:inline">Presets:</span>
             {PRESET_TEMPLATES.map((tpl) => (
               <button
                 key={tpl.id}
                 type="button"
                 onClick={() => {
-                  loadPresetTemplate(tpl.id);
+                  loadPresetTemplate(tpl.id, selectedLevel);
                   setValue("title", tpl.title);
                   setValue("domain", tpl.requirements.domain);
                   setValue("rps", tpl.requirements.targetScale.rps);
@@ -188,6 +226,82 @@ export const RequirementsWizard: React.FC = () => {
                 {tpl.domain}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* DESIGN LEVEL SELECTION (HLD vs LLD vs Full) */}
+        <div className="mt-6 p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-indigo-400" />
+              <span>Select Architecture Design Level</span>
+            </span>
+            <span className="text-[11px] text-slate-400">Content and sections adapt to this selection</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedLevel("hld");
+                setDesignLevel("hld");
+              }}
+              className={`p-3.5 rounded-xl border text-left transition ${
+                selectedLevel === "hld"
+                  ? "border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/50"
+                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-xs text-emerald-300">🏛️ High-Level Design (HLD)</span>
+                {selectedLevel === "hld" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                System Context, C4 Containers, Microservices, Multi-Region Topology, Security & DR SLAs.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedLevel("lld");
+                setDesignLevel("lld");
+              }}
+              className={`p-3.5 rounded-xl border text-left transition ${
+                selectedLevel === "lld"
+                  ? "border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500/50"
+                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-xs text-indigo-300">⚙️ Low-Level Design (LLD)</span>
+                {selectedLevel === "lld" && <CheckCircle2 className="w-4 h-4 text-indigo-400" />}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Class Models, Detailed DDL Schemas, API Payload Contracts, Sequence Workflows, Algorithms & Retries.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedLevel("full");
+                setDesignLevel("full");
+              }}
+              className={`p-3.5 rounded-xl border text-left transition ${
+                selectedLevel === "full"
+                  ? "border-cyan-500 bg-cyan-950/40 ring-1 ring-cyan-500/50"
+                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-xs text-cyan-300">📑 Full Architecture (HLD + LLD)</span>
+                {selectedLevel === "full" && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Comprehensive end-to-end design specification incorporating both macro topology and deep code mechanics.
+              </p>
+            </button>
           </div>
         </div>
 

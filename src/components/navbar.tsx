@@ -36,6 +36,8 @@ export const Navbar: React.FC = () => {
     setActiveTab,
     currentProject,
     resetProject,
+    setDesignLevel,
+    startBlankProject,
   } = useDocStore();
 
   const {
@@ -116,13 +118,50 @@ export const Navbar: React.FC = () => {
                 <span className="font-extrabold text-base tracking-tight text-white">
                   DocArch <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">AI</span>
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  HLD / LLD
-                </span>
+                
+                {/* HLD / LLD Quick Toggle */}
+                <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("hld")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "hld"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-emerald-300"
+                    }`}
+                    title="High-Level Design Mode"
+                  >
+                    HLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("lld")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "lld"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-indigo-300"
+                    }`}
+                    title="Low-Level Design Mode"
+                  >
+                    LLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("full")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "full"
+                        ? "bg-cyan-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-cyan-300"
+                    }`}
+                    title="Full Architecture Mode (HLD + LLD)"
+                  >
+                    Full
+                  </button>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 font-normal hidden sm:block">
-                Software Architecture & Technical Design Document Studio
-              </p>
+              <div className="text-[11px] text-slate-400 truncate max-w-[200px] hidden sm:block">
+                {currentProject.metadata.title}
+              </div>
             </div>
           </div>
 

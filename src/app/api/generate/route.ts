@@ -182,7 +182,7 @@ Return clean Markdown with valid Mermaid.js diagrams if appropriate.`;
       });
     }
 
-    const generatedSections = generateStandardDocument(projectData);
+    const generatedSections = generateStandardDocument(projectData, projectData.designLevel);
 
     return NextResponse.json({
       success: true,

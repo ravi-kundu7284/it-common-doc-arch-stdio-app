@@ -1,435 +1,848 @@
-import { DesignDocProject } from "@/types";
+import { DesignDocProject, DocumentSection, DesignLevel } from "@/types";
 
-export function generateStandardDocument(
+/**
+ * Replace occurrences of a previous title or domain across all document sections.
+ */
+export function syncTitleAcrossSections(
+  sections: DocumentSection[],
+  oldTitle: string,
+  newTitle: string
+): DocumentSection[] {
+  if (!oldTitle || !newTitle || oldTitle === newTitle) return sections;
+  return sections.map((sec) => ({
+    ...sec,
+    contentMarkdown: sec.contentMarkdown.replaceAll(oldTitle, newTitle),
+  }));
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * 1. HIGH-LEVEL DESIGN (HLD) GENERATOR
+ * Focus: High-level topology, C4 models, subsystem boundaries, external integrations,
+ * cloud infra, security governance, SLAs, and trade-offs.
+ * -----------------------------------------------------------------------------
+ */
+export function generateHldDocument(
   projectData: Omit<DesignDocProject, "documentSections"> & {
     selectedSectionIds?: string[];
   }
-): DesignDocProject["documentSections"] {
+): DocumentSection[] {
   const { metadata, requirements, recommendations, selectedSectionIds } = projectData;
-  const { title } = metadata;
+  const title = metadata?.title?.trim() || "System Architecture Design";
   const { domain, targetScale, functionalRequirements, nonFunctionalRequirements, constraints } = requirements;
   const { selectedPattern, stack, patternAlternatives } = recommendations;
 
-  const allSections: {
-    id: string;
-    title: string;
-    contentMarkdown: string;
-    mermaidDiagrams?: string[];
-  }[] = [
-    // 1. Executive Summary & Scope
+  const sections: DocumentSection[] = [
+    // HLD 1: Executive Summary & Scope
     {
-      id: "sec-exec-summary",
-      title: "1. Executive Summary & Scope",
+      id: "hld-exec-summary",
+      title: "1. Executive Summary & Scope (HLD)",
+      level: "hld",
+      phase: "Phase 1: Context & Scope",
       contentMarkdown: `## 1. Executive Summary & Scope
 
 ### 1.1 Context & Problem Statement
-The **${title}** system is designed to provide a mission-critical, enterprise-grade architecture for the **${domain}** domain. As customer and transaction volumes expand, the legacy or baseline architecture struggles to deliver the strict throughput, reliability, and security SLAs required. 
+The **${title}** system is designed to provide an enterprise-grade architectural blueprint for the **${domain}** domain. As user concurrency and transaction volumes expand, the target architecture must guarantee strict throughput, sub-second latency, and multi-region resilience.
 
-This document defines the comprehensive Technical Architecture (High-Level Design & Low-Level Design) adhering to the **${selectedPattern}** pattern to satisfy business scale, compliance standards, and fault-tolerance objectives.
+This High-Level Design (HLD) establishes the overarching topology, service boundaries, technology choices, and architectural standards adhering to the **${selectedPattern}** pattern.
 
-### 1.2 Business Objectives & Success Criteria
-- **High Throughput & Responsiveness:** Support peak loads of **${targetScale.rps.toLocaleString()} requests/second** while guaranteeing **${nonFunctionalRequirements.latency}**.
-- **User Scale & Concurrency:** Seamlessly serve an active user base of **${targetScale.users}** with linear horizontal elasticity.
-- **Enterprise Availability:** Maintain an SLA of **${nonFunctionalRequirements.availability}** with zero single points of failure (SPOF) and automated multi-zone failover.
-- **Data Governance & Retention:** Store and retain operational and audit records for **${targetScale.dataRetention}** under strict regulatory compliance (${nonFunctionalRequirements.compliance.join(", ") || "Standard Enterprise SecOps"}).
+### 1.2 Strategic Business Objectives & Success Criteria
+- **Peak Throughput:** Support up to **${targetScale.rps.toLocaleString()} requests/second** during peak surges.
+- **Audience & User Scale:** Support **${targetScale.users}** with linear horizontal elasticity.
+- **Strict SLA Targets:** Guarantee **${nonFunctionalRequirements.latency}** with a service availability SLA of **${nonFunctionalRequirements.availability}**.
+- **Data Governance & Retention:** Maintain compliance with **${nonFunctionalRequirements.compliance.join(", ") || "Standard Enterprise SecOps"}** with a data retention policy of **${targetScale.dataRetention}**.
 
 ### 1.3 Scope Boundaries
 
 #### In-Scope
 ${functionalRequirements.map((req) => `- ${req}`).join("\n")}
-- Complete operational telemetry, distributed tracing, and centralized audit logging.
-- Disaster recovery and multi-region backup strategies.
+- High-availability distributed deployments across multi-availability zones.
+- Global traffic routing, SSL termination, and centralized observability.
 
-#### Out-of-Scope (Non-Goals for v1.0)
-- End-user legacy data migration scripts prior to cutover date.
-- Proprietary third-party hardware appliances outside supported cloud platforms.
-- Non-standard regional edge points outside primary cloud availability zones.
+#### Out-of-Scope (Non-Goals for Current Phase)
+- Legacy data migrations prior to scheduled production cutover.
+- Direct hardware-level custom cryptographic appliances outside cloud provider KMS.
+- Regional edge instances outside supported primary cloud regions.
 `,
     },
 
-    // 2. Architecture Overview
+    // HLD 2: System Architecture Overview & C4 Topology
     {
-      id: "sec-architecture-overview",
-      title: "2. Architecture Overview",
-      contentMarkdown: `## 2. Architecture Overview
+      id: "hld-architecture-overview",
+      title: "2. System Architecture & C4 Topology (HLD)",
+      level: "hld",
+      phase: "Phase 1: Context & Scope",
+      contentMarkdown: `## 2. System Architecture & C4 Topology
 
-### 2.1 Architectural Style & Topology
-The system adopts an **${selectedPattern}** paradigm. The topology separates client ingestion, edge boundary protection, domain service execution, event-driven decoupling, and multi-tier persistence.
+### 2.1 Architectural Paradigm & Core Philosophy
+The **${title}** adopts the **${selectedPattern}** architectural paradigm. Client requests are ingested at the edge, validated through ingress gateways, routed to decoupled domain services, and persisted in purpose-built data stores.
 
 ### 2.2 C4 Model: System Context Diagram (Level 1)
-The following C4 System Context diagram illustrates the system boundaries, human actors, and upstream/downstream integrations:
+The following System Context diagram highlights the primary human personas, core system boundary, and external upstream/downstream integrations:
 
 \`\`\`mermaid
 flowchart TD
-    User["Client Devices / Users<br/>[${targetScale.users}]"]
-    Staff["Operations & SecOps<br/>[Internal Engineering]"]
+    User["End Users / Client Applications<br/>[${targetScale.users}]"]
+    Staff["Operations & Engineering<br/>[Internal DevOps / SRE]"]
     
     subgraph SystemBoundary ["System Boundary: ${title}"]
-        Gateway["Cloud CDN & API Gateway<br/>[Edge Security & TLS 1.3]"]
-        CoreApp["${title} Core Services<br/>[${selectedPattern}]"]
+        Gateway["Cloud Edge & Ingress Gateway<br/>[WAF, TLS 1.3, Rate Limiting]"]
+        CoreEngine["${title} Core Services<br/>[${selectedPattern}]"]
     end
     
-    ExtServices["External Third-Party APIs<br/>[Gateways, SMS, Webhooks]"]
-    AuthProviders["Identity Provider<br/>[OAuth2 / OIDC / IdP]"]
+    ExtThirdParty["External Partner APIs<br/>[Gateways, Notifications, Webhooks]"]
+    IdP["Identity & Access Provider<br/>[OAuth2 / OIDC / SAML]"]
 
     User -->|"HTTPS / gRPC (TLS 1.3)"| Gateway
-    Gateway -->|"Internal Reverse Proxy"| CoreApp
-    Staff -->|"Internal VPN / Bastion"| CoreApp
-    CoreApp -->|"mTLS Outbound"| ExtServices
-    CoreApp -->|"SAML / OIDC Tokens"| AuthProviders
+    Gateway -->|"Internal Reverse Proxy"| CoreEngine
+    Staff -->|"Zero-Trust Bastion / VPN"| CoreEngine
+    CoreEngine -->|"Outbound Webhooks / REST"| ExtThirdParty
+    CoreEngine -->|"Token Verification"| IdP
 
-    classDef boundary fill:#f8fafc,stroke:#3b82f6,stroke-width:2px,color:#0f172a;
+    classDef boundary fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#ffffff;
     classDef comp fill:#1e293b,stroke:#0284c7,stroke-width:2px,color:#ffffff;
-    classDef actor fill:#047857,stroke:#059669,stroke-width:2px,color:#ffffff;
+    classDef actor fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#ffffff;
     class SystemBoundary boundary;
-    class Gateway,CoreApp comp;
-    class User,Staff,ExtServices,AuthProviders actor;
+    class Gateway,CoreEngine comp;
+    class User,Staff,ExtThirdParty,IdP actor;
 \`\`\`
 
 ### 2.3 C4 Model: Container Architecture (Level 2)
-The container diagram delineates the runtime components, communication protocols, and storage boundaries:
+The container diagram delineates runtime boundaries, inter-service protocols, and storage segregation:
 
 \`\`\`mermaid
 flowchart LR
-    Client["Client Layer<br/>[${stack.frontend}]"]
-    APIGW["API Gateway / Ingress<br/>[Rate Limiting & AuthN]"]
+    Client["Client Presentation Layer<br/>[${stack.frontend}]"]
+    APIGW["API Gateway / Ingress<br/>[Rate Limiting, Routing]"]
     
-    subgraph Microservices ["Execution Compute Fabric"]
-        IngressSvc["Ingestion & Validation Service"]
-        CoreSvc["Core Business Domain Service"]
-        AsyncWorker["Async Background Worker Cluster"]
+    subgraph CoreFabric ["Core Processing Services"]
+        IngressSvc["Ingress API Gateway Service"]
+        DomainSvc["${domain} Core Domain Service"]
+        AsyncCluster["Async Worker & Background Cluster"]
     end
     
-    CacheNode["In-Memory Cache<br/>[${stack.caching}]"]
-    MsgBus["Distributed Message Bus<br/>[${stack.messaging}]"]
-    PrimaryDB["Primary Storage<br/>[${stack.database}]"]
+    CacheNode["In-Memory Distributed Cache<br/>[${stack.caching}]"]
+    EventBus["Durable Message Streaming Bus<br/>[${stack.messaging}]"]
+    PrimaryDB["Primary Relational/NoSQL Database<br/>[${stack.database}]"]
 
     Client -->|"HTTPS / WebSockets"| APIGW
     APIGW -->|"gRPC / HTTP/2"| IngressSvc
-    IngressSvc -->|"Sync Query"| CacheNode
-    IngressSvc -->|"Publishes Domain Events"| MsgBus
-    MsgBus -->|"Subscribes & Consumes"| AsyncWorker
-    AsyncWorker -->|"Batch Upserts / Writes"| PrimaryDB
-    IngressSvc -->|"Direct Read/Write"| CoreSvc
-    CoreSvc -->|"ACID Transaction"| PrimaryDB
+    IngressSvc -->|"Fast Read"| CacheNode
+    IngressSvc -->|"Publish Events"| EventBus
+    EventBus -->|"Consume Tasks"| AsyncCluster
+    AsyncCluster -->|"Batch Persist"| PrimaryDB
+    IngressSvc -->|"Sync Core Ops"| DomainSvc
+    DomainSvc -->|"ACID State Changes"| PrimaryDB
 
     classDef compute fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
     classDef store fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#ffffff;
     classDef bus fill:#701a75,stroke:#f472b6,stroke-width:2px,color:#ffffff;
-    class IngressSvc,CoreSvc,AsyncWorker,APIGW compute;
+    class IngressSvc,DomainSvc,AsyncCluster,APIGW compute;
     class CacheNode,PrimaryDB store;
-    class MsgBus bus;
+    class EventBus bus;
 \`\`\`
 `,
     },
 
-    // 3. Component & Service Design
+    // HLD 3: Service Decomposition & Boundaries
     {
-      id: "sec-component-design",
-      title: "3. Component & Service Design (LLD)",
-      contentMarkdown: `## 3. Component & Service Design (Low-Level Design)
+      id: "hld-service-decomposition",
+      title: "3. Service Decomposition & Subsystems (HLD)",
+      level: "hld",
+      phase: "Phase 2: Subsystem Design",
+      contentMarkdown: `## 3. Service Decomposition & Subsystems
 
-### 3.1 Service Responsibilities & Domain Boundaries
-The core processing is decomposed into modular services adhering to bounded contexts:
+### 3.1 Bounded Contexts & Subsystem Roles
+The application architecture divides responsibilities into autonomous functional domains:
 
-| Service / Component | Protocol | Technology | Primary Responsibility |
+| Subsystem / Service | Role & Responsibility | Implementation Tech | Communication Protocols |
 | :--- | :--- | :--- | :--- |
-| **API Gateway & Router** | HTTP/2, HTTPS | Envoy / Cloudflare | Token validation, SSL termination, global rate limiting, traffic routing. |
-| **Domain Orchestrator** | gRPC / REST | ${stack.backend} | Enforces domain business rules, input schema validation, and authorization. |
-| **High-Throughput Worker** | Asynchronous | ${stack.backend} | Consumes background queues, processes batch ledger tasks, and external syncs. |
-| **State & Cache Manager** | Redis Protocol | ${stack.caching} | Real-time session locks, idempotency keys, hot cache layer. |
-| **Audit & Event Broker** | Binary TCP | ${stack.messaging} | Durable event log, pub/sub fan-out, dead-letter queue (DLQ) routing. |
+| **Ingress & Edge Routing** | Terminates TLS, verifies rate limits, sanitizes incoming payloads, and load balances traffic. | Cloudflare / Envoy Gateway | HTTPS (TLS 1.3), HTTP/2 |
+| **Domain Orchestration** | Enforces core ${domain} business validation rules and coordinates multi-step operations. | ${stack.backend} | Internal gRPC / REST |
+| **Asynchronous Task Queue** | Processes heavy background calculations, batch processing, and non-blocking syncs. | ${stack.backend} | Event-driven (Kafka / SQS) |
+| **Hot Storage & Caching** | Serves read-heavy queries, distributed lock coordination, and token expiration. | ${stack.caching} | Redis protocol / Memcached |
+| **System of Record** | Guarantees durable persistence, relational consistency, and auditable history. | ${stack.database} | SQL / Wire Protocol |
+`,
+    },
 
-### 3.2 API Contracts & Communication Protocols
-1. **External Ingress:** RESTful JSON over HTTPS (TLS 1.3) with OpenAPI 3.1 specifications and strict header signature verification (\`X-Request-ID\`, \`X-Signature-SHA256\`, \`Idempotency-Key\`).
-2. **Internal Inter-Service RPC:** High-performance binary **gRPC** with Protobuf schemas, multiplexed HTTP/2 connections, and mutual TLS (mTLS) zero-trust authentication.
-3. **Event Notification Protocol:** CloudEvents 1.0 JSON format delivered via **${stack.messaging}**.
+    // HLD 4: Data Architecture & Storage Strategy
+    {
+      id: "hld-data-architecture",
+      title: "4. Data Architecture & Persistence Strategy (HLD)",
+      level: "hld",
+      phase: "Phase 2: Subsystem Design",
+      contentMarkdown: `## 4. Data Architecture & Persistence Strategy
 
-\`\`\`json
-// Sample Ingress Request Header & Payload Specification
-{
-  "traceId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
-  "idempotencyKey": "idem_sec_993847291034",
-  "timestamp": 1727424000,
-  "eventType": "DOMAIN_COMMAND_EXECUTE",
-  "payload": {
-    "organizationId": "org_77192",
-    "operation": "TRANSACTION_AUTHORIZE",
-    "attributes": {
-      "targetScaleRps": ${targetScale.rps},
-      "enforceSLA": true
+### 4.1 Polyglot Storage Strategy
+The data layer utilizes specialized storage tiers matching specific latency and consistency profiles:
+- **Transactional State (System of Record):** Hosted on **${stack.database}**. Enforces schema integrity, strict primary keys, and foreign-key constraints.
+- **High-Speed Cache Tier:** Hosted on **${stack.caching}** with sub-millisecond retrieval. Employs Cache-Aside pattern with deterministic key namespacing.
+- **Event Streaming & Audit Logs:** Hosted on **${stack.messaging}** with partitioned logs retaining immutable history for **${targetScale.dataRetention}**.
+
+### 4.2 Data Flow & Ingestion Pipeline
+\`\`\`mermaid
+flowchart TD
+    Client["Client Request"] --> Gateway["API Gateway"]
+    Gateway --> WritePath["Write Handler (Command)"]
+    Gateway --> ReadPath["Read Handler (Query)"]
+
+    ReadPath -->|"1. Cache Query"| Cache["${stack.caching}"]
+    Cache -.->|"Cache Miss"| ReadReplica["Read Replica (${stack.database.split(" ")[0]})"]
+    
+    WritePath -->|"2. Atomic Insert/Update"| MasterDB["Primary DB (${stack.database.split(" ")[0]})"]
+    MasterDB -->|"3. Binlog / CDC Stream"| StreamBus["Event Bus (${stack.messaging.split(" ")[0]})"]
+    StreamBus -->|"4. Update Cache & Search"| Cache
+    MasterDB -.->|"Replication Sync"| ReadReplica
+\`\`\`
+`,
+    },
+
+    // HLD 5: External Integrations & API Gateway
+    {
+      id: "hld-integrations",
+      title: "5. External Integrations & APIs (HLD)",
+      level: "hld",
+      phase: "Phase 2: Subsystem Design",
+      contentMarkdown: `## 5. External Integrations & APIs
+
+### 5.1 External Integration Topology
+To operate within the modern enterprise ecosystem, **${title}** integrates with upstream identity providers, third-party webhook receivers, and payment/notification gateways.
+
+### 5.2 API Boundary Standards
+1. **Public APIs:** OpenAPI 3.1 specification, JSON payloads over HTTPS, versioned at \`/api/v1/...\`.
+2. **Idempotency Keys:** Mandatory \`Idempotency-Key\` header on all non-GET state-mutating requests.
+3. **Outbound Resiliency:** All third-party external integrations operate behind circuit breakers with exponential backoff and jitter.
+`,
+    },
+
+    // HLD 6: Infrastructure & Multi-Region Topology
+    {
+      id: "hld-infrastructure",
+      title: "6. Infrastructure & Deployment Topology (HLD)",
+      level: "hld",
+      phase: "Phase 3: Operations & Reliability",
+      contentMarkdown: `## 6. Infrastructure & Deployment Topology
+
+### 6.1 Multi-Availability Zone Cloud Architecture
+Deployed using Infrastructure as Code (**${stack.devops}**) across high-availability cloud regions:
+
+\`\`\`mermaid
+graph TD
+    GlobalDNS["Global Anycast DNS / CDN"]
+    GlobalWAF["Cloud Edge WAF & DDoS Shield"]
+    
+    subgraph CloudRegion ["Multi-AZ Cloud Region"]
+        subgraph AZ_A ["Availability Zone A"]
+            ALB1["Application Load Balancer A"]
+            AppClusterA["Container Nodes (K8s Pods)"]
+            DB_Primary["${stack.database.split(" ")[0]} Primary (Write)"]
+        end
+        subgraph AZ_B ["Availability Zone B"]
+            ALB2["Application Load Balancer B"]
+            AppClusterB["Container Nodes (K8s Pods)"]
+            DB_Secondary["${stack.database.split(" ")[0]} Standby (Sync)"]
+        end
+    end
+    
+    ColdStore["Encrypted Object Storage Backup"]
+
+    GlobalDNS --> GlobalWAF
+    GlobalWAF --> ALB1 & ALB2
+    ALB1 --> AppClusterA
+    ALB2 --> AppClusterB
+    AppClusterA & AppClusterB --> DB_Primary
+    DB_Primary -.->|"Synchronous Replication"| DB_Secondary
+    DB_Primary -.->|"Automated Daily Snapshots"| ColdStore
+\`\`\`
+
+### 6.2 Progressive Delivery & Deployment Strategy
+- **Deployment Model:** Containerized orchestration utilizing Kubernetes or managed container runners.
+- **Rollout Strategy:** Automated Canary or Blue/Green rollouts with automated rollback triggers if error rate exceeds 0.1% or latency increases by $> 15\\%$.
+`,
+    },
+
+    // HLD 7: Zero-Trust Security & Compliance
+    {
+      id: "hld-security",
+      title: "7. Security, Zero Trust & Compliance (HLD)",
+      level: "hld",
+      phase: "Phase 3: Operations & Reliability",
+      contentMarkdown: `## 7. Security, Zero Trust & Compliance
+
+### 7.1 Security Architecture Pillars
+- **Zero Trust Network Access (ZTNA):** All inter-service communications require mutual TLS (mTLS) with short-lived certificates.
+- **Identity & Access Management:** OAuth 2.0 / OpenID Connect with JWT access tokens and cryptographically signed claims.
+- **Data Protection at Rest:** AES-256-GCM envelope encryption for all database volumes, table partitions, and cache instances.
+- **Data Protection in Transit:** Mandatory TLS 1.3 with strict HTTPS redirection and HSTS headers.
+- **Regulatory Compliance:** Engineered to satisfy: **${nonFunctionalRequirements.compliance.join(", ") || "Standard Enterprise SecOps"}**.
+`,
+    },
+
+    // HLD 8: Non-Functional Requirements & Resilience SLAs
+    {
+      id: "hld-nfr-resilience",
+      title: "8. NFRs & Disaster Recovery SLAs (HLD)",
+      level: "hld",
+      phase: "Phase 3: Operations & Reliability",
+      contentMarkdown: `## 8. Non-Functional Requirements & Disaster Recovery SLAs
+
+### 8.1 Performance & Availability Targets
+- **Target Scale:** ${targetScale.rps.toLocaleString()} RPS sustained peak load.
+- **Latency Objectives:** ${nonFunctionalRequirements.latency} (p99).
+- **Service Level Agreement (SLA):** ${nonFunctionalRequirements.availability} uptime.
+
+### 8.2 Disaster Recovery Objectives
+- **Recovery Point Objective (RPO):** $< 1\\text{ second}$ (Synchronous multi-zone database replication).
+- **Recovery Time Objective (RTO):** $< 30\\text{ seconds}$ (Automated DNS health failover and container self-healing).
+`,
+    },
+
+    // HLD 9: Architecture Decision Records (ADRs) & Trade-offs
+    {
+      id: "hld-adrs-tradeoffs",
+      title: "9. Architecture Decision Records (ADRs) & Trade-offs (HLD)",
+      level: "hld",
+      phase: "Phase 4: Synthesis & Governance",
+      contentMarkdown: `## 9. Architecture Decision Records (ADRs) & Trade-offs
+
+### 9.1 ADR: Selected Architectural Pattern
+- **Decision:** Adopted **${selectedPattern}**.
+- **Context:** System requires high concurrency (${targetScale.rps} RPS), horizontal scalability, and modular maintenance.
+- **Consequences:** Provides decoupled fault domains and independent scaling at the cost of distributed tracing overhead.
+
+### 9.2 Pattern Comparison & Alternatives Evaluated
+| Architectural Pattern | Suitability Score | Key Strengths | Reason Rejected / Trade-Off |
+| :--- | :--- | :--- | :--- |
+| **${selectedPattern} (Chosen)** | **9.5 / 10** | High scalability, decoupled deployments | Requires distributed tracing tooling |
+${patternAlternatives
+  .map(
+    (alt) =>
+      `| **${alt.pattern}** | 6.5 / 10 | Simpler initial scaffolding | ${alt.reasonNotChosen} |`
+  )
+  .join("\n")}
+
+### 9.3 Tech Stack Selection Justification
+- **Frontend (${stack.frontend}):** Optimal performance and user experience.
+- **Backend (${stack.backend}):** High-throughput compute with minimal thread contention.
+- **Database (${stack.database}):** Guaranteed referential integrity and strong consistency.
+- **Caching (${stack.caching}):** Low-latency sub-millisecond retrieval.
+- **Messaging (${stack.messaging}):** Durable event publishing and spike absorption.
+- **DevOps (${stack.devops}):** Automated CI/CD, container orchestration, and observability.
+`,
+    },
+  ];
+
+  if (selectedSectionIds && selectedSectionIds.length > 0) {
+    return sections.filter((s) => selectedSectionIds.includes(s.id));
+  }
+  return sections;
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * 2. LOW-LEVEL DESIGN (LLD) GENERATOR
+ * Focus: Detailed class diagrams, database schemas (DDL), API payload specifications,
+ * detailed sequence diagrams, algorithms, retry/concurrency, and telemetry.
+ * -----------------------------------------------------------------------------
+ */
+export function generateLldDocument(
+  projectData: Omit<DesignDocProject, "documentSections"> & {
+    selectedSectionIds?: string[];
+  }
+): DocumentSection[] {
+  const { metadata, requirements, recommendations, selectedSectionIds } = projectData;
+  const title = metadata?.title?.trim() || "System Implementation Specification";
+  const { domain, targetScale, functionalRequirements, nonFunctionalRequirements } = requirements;
+  const { selectedPattern, stack } = recommendations;
+
+  const sections: DocumentSection[] = [
+    // LLD 1: Component & Class / Module Design
+    {
+      id: "lld-component-class-design",
+      title: "1. Component & Class / Module Design (LLD)",
+      level: "lld",
+      phase: "Phase 1: Component & Code Architecture",
+      contentMarkdown: `## 1. Component & Class / Module Design
+
+### 1.1 Class Hierarchy & Object-Oriented Structure
+The core business domain within **${title}** applies Domain-Driven Design (DDD) with clean interfaces and dependency inversion:
+
+\`\`\`mermaid
+classDiagram
+    class ICommandBus {
+        <<interface>>
+        +dispatch(command: Command) Promise~Result~
+        +registerHandler(type: string, handler: ICommandHandler)
     }
+
+    class DomainController {
+        -ICommandBus commandBus
+        -IQueryHandler queryHandler
+        +handleRequest(req: HttpRequest) HttpResponse
+        +validatePayload(schema: Schema, data: any) boolean
+    }
+
+    class AggregateRoot {
+        <<abstract>>
+        #id: UUID
+        #version: Long
+        #uncommittedEvents: List~DomainEvent~
+        +apply(event: DomainEvent) void
+        +clearEvents() void
+    }
+
+    class DomainEntity {
+        -status: EntityStatus
+        -metadata: Map~String, Object~
+        +executeAction(params: ActionParams) ActionResult
+        +validateInvariants() boolean
+    }
+
+    class IRepository~T~ {
+        <<interface>>
+        +findById(id: UUID) Promise~T~
+        +save(entity: T) Promise~void~
+        +delete(id: UUID) Promise~void~
+    }
+
+    DomainController --> ICommandBus : Dispatches commands
+    AggregateRoot <|-- DomainEntity : Extends
+    IRepository <.. DomainEntity : Persisted by
+\`\`\`
+
+### 1.2 Design Patterns Utilized
+1. **Repository Pattern:** Decouples the domain logic from database query implementations.
+2. **Factory & Builder Patterns:** Encapsulates the instantiation of complex domain aggregates.
+3. **Decorator / Middleware Pattern:** Applies cross-cutting concerns (authentication, rate limiting, distributed tracing) without modifying core business handlers.
+`,
+    },
+
+    // LLD 2: Database Schemas, DDL & Entity Relationship Diagram
+    {
+      id: "lld-database-schemas",
+      title: "2. Database Schemas, Tables & ERD (LLD)",
+      level: "lld",
+      phase: "Phase 1: Component & Code Architecture",
+      contentMarkdown: `## 2. Database Schemas, Tables & ERD
+
+### 2.1 Entity Relationship Diagram (Detailed ERD)
+\`\`\`mermaid
+erDiagram
+    TENANTS ||--o{ ACCOUNTS : manages
+    TENANTS {
+        uuid id PK
+        string slug UK
+        string legal_name
+        string plan_tier
+        timestamp created_at
+    }
+    ACCOUNTS ||--o{ USER_CREDENTIALS : secures
+    ACCOUNTS {
+        uuid id PK
+        uuid tenant_id FK
+        string email UK
+        string status
+        timestamp created_at
+    }
+    USER_CREDENTIALS {
+        uuid id PK
+        uuid account_id FK
+        string password_hash
+        string salt
+        int failed_attempts
+        timestamp locked_until
+    }
+    ACCOUNTS ||--o{ DOMAIN_RECORDS : generates
+    DOMAIN_RECORDS {
+        uuid id PK
+        uuid account_id FK
+        string idempotency_key UK
+        numeric value_amount
+        string state
+        timestamp recorded_at
+    }
+    DOMAIN_RECORDS ||--o{ AUDIT_TRAILS : logs
+    AUDIT_TRAILS {
+        uuid id PK
+        uuid record_id FK
+        string actor_id
+        string event_type
+        jsonb details
+        timestamp occurred_at
+    }
+\`\`\`
+
+### 2.2 DDL Schema Definition (PostgreSQL 16 / CockroachDB)
+\`\`\`sql
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Core Tenants Table
+CREATE TABLE IF NOT EXISTS tenants (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slug VARCHAR(64) UNIQUE NOT NULL,
+    legal_name VARCHAR(255) NOT NULL,
+    plan_tier VARCHAR(32) DEFAULT 'standard',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Domain Records Table with Partitioning & Idempotency
+CREATE TABLE IF NOT EXISTS domain_records (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    idempotency_key VARCHAR(128) NOT NULL,
+    value_amount NUMERIC(18, 4) NOT NULL DEFAULT 0.0000,
+    state VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_tenant_idempotency UNIQUE (tenant_id, idempotency_key)
+);
+
+-- Performance Indexes
+CREATE INDEX IF NOT EXISTS idx_records_tenant_created 
+    ON domain_records(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_records_state 
+    ON domain_records(state) WHERE state = 'PENDING';
+\`\`\`
+`,
+    },
+
+    // LLD 3: API Endpoint Specifications & Contracts
+    {
+      id: "lld-api-specifications",
+      title: "3. API Specifications & Payload Contracts (LLD)",
+      level: "lld",
+      phase: "Phase 2: API & Data Exchange",
+      contentMarkdown: `## 3. API Specifications & Payload Contracts
+
+### 3.1 Endpoint Index & HTTP Methods
+| Method | Route Path | Description | Auth Scope | Rate Limit |
+| :--- | :--- | :--- | :--- | :--- |
+| \`POST\` | \`/api/v1/commands/execute\` | Submits a state-mutating domain operation with idempotency. | \`write:domain\` | 500 req/min |
+| \`GET\` | \`/api/v1/records/{id}\` | Retrieves full status and audit details of a record. | \`read:domain\` | 2000 req/min |
+| \`GET\` | \`/api/v1/health/liveness\` | Kubernetes liveness probe endpoint. | None | Unlimited |
+| \`GET\` | \`/api/v1/health/readiness\` | Validates DB and cache connections. | None | Unlimited |
+
+### 3.2 Request / Response Payload Specification
+
+#### Request Payload: \`POST /api/v1/commands/execute\`
+\`\`\`json
+{
+  "traceId": "c479b1df-4b9d-47fb-9ad1-9ef2134db02a",
+  "idempotencyKey": "idem_req_20260928_8819230",
+  "operation": "EXECUTE_DOMAIN_TRANSACTION",
+  "parameters": {
+    "targetAmount": 1500.50,
+    "currency": "USD",
+    "metadata": {
+      "channel": "API_INGRESS",
+      "requestedScale": "${targetScale.rps} RPS"
+    }
+  }
+}
+\`\`\`
+
+#### Success Response: \`201 Created\`
+\`\`\`json
+{
+  "success": true,
+  "data": {
+    "recordId": "rec_01J8W2XZ5E81A",
+    "status": "CONFIRMED",
+    "createdAt": "2026-09-28T14:30:00Z"
+  }
+}
+\`\`\`
+
+#### Error Response: \`422 Unprocessable Entity\`
+\`\`\`json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Field 'targetAmount' exceeds authorized transaction ceiling",
+    "traceId": "c479b1df-4b9d-47fb-9ad1-9ef2134db02a"
   }
 }
 \`\`\`
 `,
     },
 
-    // 4. Data Modeling & Storage
+    // LLD 4: Sequence & State Machine Workflows
     {
-      id: "sec-data-modeling",
-      title: "4. Data Modeling & Storage",
-      contentMarkdown: `## 4. Data Modeling & Storage
+      id: "lld-sequence-workflows",
+      title: "4. Detailed Sequence & State Machine Workflows (LLD)",
+      level: "lld",
+      phase: "Phase 2: API & Data Exchange",
+      contentMarkdown: `## 4. Detailed Sequence & State Machine Workflows
 
-### 4.1 Storage Tier Strategy
-- **Primary Database (\`${stack.database}\`):** Relational or Distributed SQL serving as the system of record with ACID guarantees for transactional states.
-- **In-Memory Cache (\`${stack.caching}\`):** High-speed sub-millisecond key-value storage for distributed locks, token cache, and hot reads.
-- **Telemetry & Event Store:** Append-only log storage optimized for analytics and historical auditing under the **${targetScale.dataRetention}** retention policy.
-
-### 4.2 Entity Relationship Diagram (ERD)
-The logical domain entities, relational cardinalities, and primary indices are shown below:
-
-\`\`\`mermaid
-erDiagram
-    TENANT ||--o{ USER_ACCOUNT : contains
-    TENANT {
-        uuid id PK
-        string name
-        string tier
-        string status
-        timestamp created_at
-    }
-    USER_ACCOUNT ||--o{ SESSION_AUTH : generates
-    USER_ACCOUNT {
-        uuid id PK
-        uuid tenant_id FK
-        string email
-        string password_hash
-        string role
-        timestamp last_login
-    }
-    USER_ACCOUNT ||--o{ AUDIT_LOG : initiates
-    AUDIT_LOG {
-        uuid id PK
-        uuid user_id FK
-        string action_type
-        string client_ip
-        jsonb metadata
-        timestamp created_at
-    }
-    TENANT ||--o{ DOMAIN_ENTITY : owns
-    DOMAIN_ENTITY ||--o{ TRANSACTION_RECORD : executes
-    DOMAIN_ENTITY {
-        uuid id PK
-        uuid tenant_id FK
-        string entity_name
-        string state
-        numeric balance
-        bigint version
-    }
-    TRANSACTION_RECORD {
-        uuid id PK
-        uuid entity_id FK
-        string idempotency_key UK
-        numeric amount
-        string status
-        timestamp settled_at
-    }
-\`\`\`
-
-### 4.3 Indexing & Partitioning Strategy
-1. **Partitioning Key:** Range partitioning on \`created_at\` (monthly chunks) combined with list partitioning by \`tenant_id\` to guarantee multi-tenant data isolation.
-2. **Compound Unique Index:** \`CREATE UNIQUE INDEX idx_txn_idem ON TRANSACTION_RECORD(entity_id, idempotency_key);\` ensures zero duplicate billing or re-executions.
-3. **Read Acceleration:** Redis caching with **Read-Through / Cache-Aside** pattern with jittered TTLs (300s ± 30s) to prevent cache stampedes.
-`,
-    },
-
-    // 5. Key Workflows & Sequence Diagrams
-    {
-      id: "sec-workflows-sequence",
-      title: "5. Key Workflows & Sequence Diagrams",
-      contentMarkdown: `## 5. Key Workflows & Sequence Diagrams
-
-### 5.1 End-to-End Core Transaction & Authorization Flow
-The following sequence diagram details the step-by-step lifecycle for critical business requests, including distributed token validation, idempotency checks, atomic persistence, and async notification fan-out:
-
+### 4.1 End-to-End Command Processing Sequence
 \`\`\`mermaid
 sequenceDiagram
     autonumber
     actor Client as Client App
     participant GW as API Gateway
     participant Cache as Redis Cache
-    participant Core as Core Domain Service
-    participant DB as ${stack.database.split(" ")[0]}
-    participant Bus as ${stack.messaging.split(" ")[0]} Bus
-    participant Worker as Async Workers
+    participant Service as Domain Service
+    participant DB as Postgres DB
+    participant Queue as Kafka Broker
 
-    Client->>GW: POST /api/v1/execute (Bearer JWT + Idempotency-Key)
-    GW->>GW: Validate JWT Signature & Rate Limit
+    Client->>GW: POST /api/v1/commands/execute
+    GW->>GW: Validate JWT, Headers & Rate Limits
     GW->>Cache: GET idempotency_key:{id}
-    alt Idempotency Key Exists (Cached Response)
-        Cache-->>GW: Return Cached Response Payload
-        GW-->>Client: 200 OK (Replayed Result)
-    else Key Not Found (New Request)
-        Cache-->>GW: Nil (Proceed)
-        GW->>Cache: SETNX idempotency_key:{id} (IN_PROGRESS, TTL=60s)
-        GW->>Core: Forward Command (gRPC)
-        Core->>DB: BEGIN TRANSACTION (Serializable)
-        Core->>DB: Verify Preconditions & Deduct Quota
-        Core->>DB: INSERT Audit & State Changes
-        DB-->>Core: Commit Success (TxID: 88120)
-        Core->>Bus: Publish Domain Event [EVENT_TRANSACTION_COMMITTED]
-        Core->>Cache: SET idempotency_key:{id} (COMMITTED, TTL=86400s)
-        Core-->>GW: Execution Result OK
-        GW-->>Client: 201 Created (Confirmed)
-        
-        par Async Post-Processing
-            Bus->>Worker: Consume EVENT_TRANSACTION_COMMITTED
-            Worker->>Worker: Generate Invoice & Webhook Notification
-        end
+    alt Idempotency Key Already Exists
+        Cache-->>GW: Return Cached Result
+        GW-->>Client: 200 OK (Replayed Response)
+    else New Request
+        Cache-->>GW: Nil
+        GW->>Cache: SETNX idempotency_key:{id} (STATE=IN_PROGRESS, TTL=60s)
+        GW->>Service: Forward gRPC Request
+        Service->>DB: BEGIN Transaction
+        Service->>DB: Lock Entity & Verify Invariants
+        Service->>DB: INSERT Record & Update State
+        DB-->>Service: Transaction Committed
+        Service->>Queue: Publish DOMAIN_EVENT_PROCESSED
+        Service->>Cache: SET idempotency_key:{id} (STATE=COMPLETED, TTL=86400s)
+        Service-->>GW: Operation Successful
+        GW-->>Client: 201 Created
     end
 \`\`\`
 
-### 5.2 Failure & Circuit Breaker Workflow
-If the primary persistence layer or downstream service experiences latency spikes exceeding the SLA (${nonFunctionalRequirements.latency}), the Ingress Gateway triggers a Circuit Breaker (Hystrix / Resilience4j pattern) returning an immediate degraded fallback, queuing non-critical events into a Dead Letter Queue (DLQ) to protect system stability.
+### 4.2 Record State Transition Lifecycle
+\`\`\`mermaid
+stateDiagram-v2
+    [*] --> DRAFT : Record Submitted
+    DRAFT --> VALIDATED : Schema & Rule Check Pass
+    DRAFT --> REJECTED : Validation Error
+    VALIDATED --> PROCESSING : Acquired Lock
+    PROCESSING --> COMPLETED : Committed to DB
+    PROCESSING --> FAILED : Timeout / Unrecoverable Error
+    FAILED --> RETRYING : Retry Triggered (< 3 attempts)
+    RETRYING --> PROCESSING : Re-executed
+    RETRYING --> DEAD_LETTER : Max Retries Exceeded
+    COMPLETED --> [*]
+    REJECTED --> [*]
+    DEAD_LETTER --> [*]
+\`\`\`
 `,
     },
 
-    // 6. Cross-Cutting Concerns
+    // LLD 5: Core Business Logic & Algorithm Flowcharts
     {
-      id: "sec-cross-cutting",
-      title: "6. Cross-Cutting Concerns",
-      contentMarkdown: `## 6. Cross-Cutting Concerns
+      id: "lld-algorithm-flowcharts",
+      title: "5. Algorithms & Business Logic Flowcharts (LLD)",
+      level: "lld",
+      phase: "Phase 3: Algorithms & Execution Mechanics",
+      contentMarkdown: `## 5. Algorithms & Business Logic Flowcharts
 
-### 6.1 Security & Compliance Framework
-- **Authentication & Authorization:** OAuth 2.0 / OpenID Connect with short-lived RS256 JWT tokens (15-minute expiry) and rotating refresh tokens stored in HTTP-only secure cookies. Fine-grained RBAC (Role-Based Access Control) enforced at the API gateway layer.
-- **Data Protection:** 
-  - **In-Transit:** Mandatory TLS 1.3 with strict cipher suites and HSTS enabled.
-  - **At-Rest:** AES-256 GCM envelope encryption via Cloud KMS / HSM for all databases, caches, and storage volumes.
-- **Regulatory Compliance:** Adherence to **${nonFunctionalRequirements.compliance.join(", ")}**, including audit logging, PII data masking, and automated data redaction.
-
-### 6.2 Observability: Metrics, Logs & Tracing (Three Pillars)
+### 5.1 Business Invariant Validation Logic
 \`\`\`mermaid
 flowchart TD
-    subgraph Instrumentation ["App & Infrastructure Tier"]
-        App["Services [${stack.backend}]"]
-        DBNode["Databases & Caches"]
-    end
-
-    subgraph TelemetryPipeline ["OpenTelemetry Collector Pipeline"]
-        Collector["OTel DaemonSet / Collector"]
-    end
-
-    subgraph ObservabilityBackends ["Monitoring & Alerting Backends"]
-        Metrics["Prometheus / Datadog (Metrics: RPS, Latency p95/p99, Error Rates)"]
-        Logs["Loki / Elasticsearch (Structured JSON Logs with TraceId)"]
-        Traces["Jaeger / Tempo (Distributed Tracing End-to-End)"]
-    end
-
-    App -->|"OTLP gRPC"| Collector
-    DBNode -->|"Exporters"| Collector
-    Collector --> Metrics
-    Collector --> Logs
-    Collector --> Traces
-
-    classDef inst fill:#0284c7,stroke:#0369a1,color:#fff;
-    classDef pipe fill:#7c3aed,stroke:#6d28d9,color:#fff;
-    classDef obs fill:#0f172a,stroke:#38bdf8,color:#fff;
-    class App,DBNode inst;
-    class Collector pipe;
-    class Metrics,Logs,Traces obs;
+    Start(["Start Ingestion"]) --> CheckAuth{"Is Token Valid & Non-Expired?"}
+    CheckAuth -- No --> AuthErr["Return 401 Unauthorized"]
+    CheckAuth -- Yes --> CheckRateLimit{"Current RPS <= Ceiling?"}
+    CheckRateLimit -- No --> RateErr["Return 429 Too Many Requests"]
+    CheckRateLimit -- Yes --> AcquireLock["Acquire Distributed Lock (Redis Redlock)"]
+    AcquireLock --> CheckBalance{"Pre-condition checks valid?"}
+    CheckBalance -- No --> ReleaseLock["Release Lock"] --> RejectErr["Return 422 Business Rejection"]
+    CheckBalance -- Yes --> ExecuteWrite["Commit Atomic DB Transaction"]
+    ExecuteWrite --> ReleaseLock2["Release Lock"]
+    ReleaseLock2 --> EmitEvent["Emit Event to ${stack.messaging.split(" ")[0]}"]
+    EmitEvent --> ReturnSuccess(["Return 201 Created"])
 \`\`\`
 
-### 6.3 Fault Tolerance & Resilience Mechanisms
-- **Rate Limiting:** Token Bucket and Sliding Window rate limiting per IP / API client configured at ${targetScale.rps} RPS ceiling with HTTP 429 Retry-After headers.
-- **Retry with Exponential Backoff & Jitter:** Default 3 retries for transient HTTP 503/504 errors using formula: $t_{wait} = 2^{attempt} \times 100\text{ms} + \text{random}(0, 50\text{ms})$.
-- **Graceful Degradation:** Read-only replica failover if write master undergoes replication switchover.
+### 5.2 Pseudocode Implementation
+\`\`\`typescript
+async function processDomainCommand(command: DomainCommand): Promise<CommandResult> {
+  const lockKey = \`lock:entity:\${command.entityId}\`;
+  const lock = await distributedLockManager.acquire(lockKey, 5000); // 5s timeout
+
+  try {
+    const entity = await entityRepository.findById(command.entityId);
+    if (!entity) {
+      throw new EntityNotFoundException(command.entityId);
+    }
+
+    entity.assertCanExecute(command);
+    const event = entity.applyCommand(command);
+
+    await database.transaction(async (tx) => {
+      await entityRepository.save(entity, tx);
+      await outboxRepository.save(event, tx);
+    });
+
+    await messageBus.publish(event);
+    return { success: true, entityId: entity.id, version: entity.version };
+  } finally {
+    await lock.release();
+  }
+}
+\`\`\`
 `,
     },
 
-    // 7. Infrastructure & Deployment
+    // LLD 6: Error Handling, Retry & Circuit Breakers
     {
-      id: "sec-infrastructure-deployment",
-      title: "7. Infrastructure & Deployment",
-      contentMarkdown: `## 7. Infrastructure & Deployment
+      id: "lld-error-handling",
+      title: "6. Error Handling & Circuit Breaker Policies (LLD)",
+      level: "lld",
+      phase: "Phase 3: Algorithms & Execution Mechanics",
+      contentMarkdown: `## 6. Error Handling & Circuit Breaker Policies
 
-### 7.1 Cloud Topology & Infrastructure as Code (IaC)
-Infrastructure is codified via **Terraform / Pulumi** and deployed across multi-Availability Zone (AZ) architecture:
+### 6.1 Exponential Backoff with Jitter
+For all transient downstream network errors (HTTP 502, 503, 504), clients and worker queues execute randomized full-jitter backoff:
+$$\\Delta t = \\min\\left(T_{\\max}, T_{\\text{base}} \\times 2^{\\text{attempt}}\\right) \\times \\text{random}(0.5, 1.0)$$
 
-\`\`\`mermaid
-graph TD
-    DNS["Global DNS / Anycast Route 53 / Cloudflare"]
-    WAF["Cloud WAF & DDoS Shield"]
-    
-    subgraph MultiAZ ["Multi-AZ Cloud Region"]
-        subgraph AZ1 ["Availability Zone A"]
-            LB1["Application Load Balancer"]
-            Pod1["K8s Service Pods (HPA)"]
-            DB_Master["${stack.database.split(" ")[0]} Primary (Write)"]
-        end
-        subgraph AZ2 ["Availability Zone B"]
-            LB2["Application Load Balancer"]
-            Pod2["K8s Service Pods (HPA)"]
-            DB_Replica["${stack.database.split(" ")[0]} Read Replica (Sync)"]
-        end
-    end
-    
-    Backup["Cross-Region Cold Storage (S3 / GCS)"]
+- $T_{\\text{base}} = 100\\text{ ms}$
+- $T_{\\max} = 5000\\text{ ms}$
+- Maximum Attempts: 3
 
-    DNS --> WAF
-    WAF --> LB1 & LB2
-    LB1 --> Pod1
-    LB2 --> Pod2
-    Pod1 & Pod2 --> DB_Master
-    DB_Master -.->|"Synchronous WAL Stream"| DB_Replica
-    DB_Master -.->|"Continuous Snapshotting"| Backup
-
-    classDef ext fill:#1e293b,stroke:#64748b,color:#fff;
-    classDef az fill:#065f46,stroke:#10b981,color:#fff;
-    DNS,WAF,Backup ext;
-    class Pod1,Pod2,DB_Master,DB_Replica az;
-\`\`\`
-
-### 7.2 CI/CD Pipeline
-- **Triggers:** Git tag / trunk-based PR merge to \`main\`.
-- **Pipeline Stages:** Lint & Static Analysis (SonarQube) $\rightarrow$ Unit & Integration Tests (100% pass criteria) $\rightarrow$ Docker container multi-arch build $\rightarrow$ Vulnerability scan (Trivy) $\rightarrow$ Blue/Green or Canary progressive deployment with automated rollback on error rate $> 0.1\%$.
-
-### 7.3 Disaster Recovery (DR) & Backup Objectives
-- **Recovery Point Objective (RPO):** $< 1\text{ second}$ (synchronous database write replication across multi-AZs).
-- **Recovery Time Objective (RTO):** $< 30\text{ seconds}$ (automated DNS failover and Kubernetes health-probe container restarts).
+### 6.2 Circuit Breaker Configuration (Resilience4j / Istio)
+- **Failure Rate Threshold:** 50% failures within a sliding window of 100 requests opens the circuit.
+- **Wait Duration in Open State:** 10,000 ms before entering Half-Open.
+- **Permitted Calls in Half-Open:** 10 test calls. If 90% succeed, circuit resets to Closed.
+- **Fallback Action:** Return cached degraded state or schedule async job to Dead Letter Queue (DLQ).
 `,
     },
 
-    // 8. Trade-offs & Alternatives Considered
+    // LLD 7: Concurrency & Worker Execution Model
     {
-      id: "sec-tradeoffs-alternatives",
-      title: "8. Trade-offs & Alternatives Considered",
-      contentMarkdown: `## 8. Trade-offs & Alternatives Considered
+      id: "lld-concurrency-workers",
+      title: "7. Concurrency Model & Threading / Workers (LLD)",
+      level: "lld",
+      phase: "Phase 3: Algorithms & Execution Mechanics",
+      contentMarkdown: `## 7. Concurrency Model & Threading / Workers
 
-### 8.1 Architectural Trade-Off Analysis
-Architectural design is an exercise in conscious compromise. The selected **${selectedPattern}** pattern was vetted against candidate alternatives:
+### 7.1 Worker Pool Allocation
+- **Ingress Web Server:** Non-blocking async event loop (Node.js / Go goroutines) capable of sustaining ${targetScale.rps} concurrent connections.
+- **Background Consumer Cluster:** Pre-forked worker pool scaled horizontally with partition affinity matching message broker partition keys.
+- **Distributed Locking:** Multi-node Redis Redlock ensuring single-leader concurrency per entity identifier.
+`,
+    },
 
-| Architectural Pattern | Suitability Score | Primary Advantages | Disqualifying Trade-Off / Rejection Rationale |
-| :--- | :--- | :--- | :--- |
-| **${selectedPattern} (Selected)** | **9.4 / 10** | Perfect match for domain scale (${targetScale.rps} RPS, ${targetScale.users}), decoupled deployments, and strict SLA requirements. | Requires elevated distributed observability tooling and contract testing overhead. |
-${patternAlternatives
-  .map(
-    (alt) =>
-      `| **${alt.pattern}** | 6.5 / 10 | Simpler initial scaffolding and fewer distributed components. | ${alt.reasonNotChosen} |`
-  )
-  .join("\n")}
+    // LLD 8: Caching Mechanics & Invalidation Patterns
+    {
+      id: "lld-caching-mechanics",
+      title: "8. Caching Strategy & Invalidation Mechanics (LLD)",
+      level: "lld",
+      phase: "Phase 4: Persistence, Telemetry & Ops",
+      contentMarkdown: `## 8. Caching Strategy & Invalidation Mechanics
 
-### 8.2 Technology Stack Selection Matrix
+### 8.1 Key Namespacing & TTL Topology
+- **Session Tokens:** \`session:token:{token_hash}\` (TTL: 86400s / 24h, Sliding).
+- **Domain Entity Cache:** \`entity:{tenant_id}:{id}\` (TTL: 300s $\\pm$ 30s jitter).
+- **Idempotency Locks:** \`idempotency:{tenant_id}:{key}\` (TTL: 86400s).
 
-| Component Layer | Selected Technology | Alternative Evaluated | Selection Rationale |
-| :--- | :--- | :--- | :--- |
-| **Frontend** | ${stack.frontend} | Single Page App (Pure React/Vite) | Next.js server components and edge rendering provide superior First Contentful Paint (FCP) and SEO capabilities. |
-| **Backend & Compute** | ${stack.backend} | Monolithic Ruby on Rails / Django | Superior CPU concurrency, lower memory footprint, and native async I/O required for high RPS. |
-| **Primary Persistence** | ${stack.database} | Pure NoSQL / Key-Value | Strong transactional integrity and relational referential checks required for business entities. |
-| **Cache Tier** | ${stack.caching} | Local In-Memory Cache | Distributed cache guarantees cache coherence across scaled container replicas. |
-| **Message Broker** | ${stack.messaging} | Synchronous HTTP Webhooks | Asynchronous durable message streaming isolates spikes and avoids cascading HTTP timeouts. |
-| **DevOps & Host** | ${stack.devops} | Bare Metal / Shared Hosting | Containerized orchestration provides auto-scaling, self-healing nodes, and automated zero-downtime rollouts. |
+### 8.2 Invalidation & Stampede Mitigation
+- **Cache-Aside Pattern:** Reads hit cache first. If missed, load from database and populate cache with TTL.
+- **Probabilistic Early Expiration (XFetch algorithm):** Refresh cache before expiry when hot keys experience heavy query velocity.
+`,
+    },
 
-### 8.3 Known Limitations & Future Roadmap
-1. **Dynamic Regional Traffic Sharding:** Future phases will introduce GeoDNS latency-based routing across EU, US, and APAC regions.
-2. **AI-Assisted Capacity Auto-tuning:** Integration of predictive machine learning models to pre-warm serverless pods 10 minutes prior to expected flash spikes.
+    // LLD 9: Logging, Tracing & Telemetry Instrumentation
+    {
+      id: "lld-telemetry-instrumentation",
+      title: "9. Telemetry, Tracing & Log Schemas (LLD)",
+      level: "lld",
+      phase: "Phase 4: Persistence, Telemetry & Ops",
+      contentMarkdown: `## 9. Telemetry, Tracing & Log Schemas
+
+### 9.1 Structured JSON Log Standard
+Every log entry emitted by **${title}** includes unified contextual tracing fields:
+\`\`\`json
+{
+  "timestamp": "2026-09-28T14:35:10.192Z",
+  "level": "INFO",
+  "service": "${domain.toLowerCase().replace(/[^a-z0-9]/g, "-")}-service",
+  "traceId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "spanId": "4a71b2d09c1234ef",
+  "actorId": "usr_9921",
+  "message": "Domain state transition completed successfully",
+  "durationMs": 14.2
+}
+\`\`\`
+
+### 9.2 Key Metrics & Alert Thresholds
+- \`http_requests_total\`: Counter partitioned by status code and route.
+- \`http_request_duration_seconds\`: Histogram measuring p50, p95, p99 latency against SLA (${nonFunctionalRequirements.latency}).
+- \`db_connection_pool_active\`: Gauge alerting if pool saturation exceeds 85%.
+`,
+    },
+
+    // LLD 10: Testing Strategy & Scenarios
+    {
+      id: "lld-testing-strategy",
+      title: "10. Unit, Integration & Performance Testing (LLD)",
+      level: "lld",
+      phase: "Phase 4: Persistence, Telemetry & Ops",
+      contentMarkdown: `## 10. Unit, Integration & Performance Testing
+
+### 10.1 Test Coverage Hierarchy
+1. **Unit Tests (80%+ target):** Domain aggregate invariants, validation rules, pure algorithms.
+2. **Integration Tests:** Database transactions, repository query plans, cache invalidation cycles (using Testcontainers).
+3. **Contract Tests:** Consumer-driven contract testing via Pact verifying OpenAPI / gRPC Protobuf compatibility.
+4. **Load & Stress Testing:** k6 / Locust performance test suites asserting ${targetScale.rps} RPS throughput.
+`,
+    },
+
+    // LLD 11: Configuration & Secrets Management
+    {
+      id: "lld-configuration-secrets",
+      title: "11. Configuration & Secrets Management (LLD)",
+      level: "lld",
+      phase: "Phase 4: Persistence, Telemetry & Ops",
+      contentMarkdown: `## 11. Configuration & Secrets Management
+
+### 11.1 Secret Injection & Rotation
+- **Zero Plaintext Secrets in Repositories:** All credentials injected dynamically via HashiCorp Vault / AWS Secrets Manager.
+- **Automated Key Rotation:** Encryption keys and database credentials rotated every 90 days.
+- **Environment Isolation:** Strictly separated staging, sandbox, and production configs with distinct KMS keys.
 `,
     },
   ];
 
   if (selectedSectionIds && selectedSectionIds.length > 0) {
-    return allSections.filter((sec) => selectedSectionIds.includes(sec.id));
+    return sections.filter((s) => selectedSectionIds.includes(s.id));
   }
+  return sections;
+}
 
-  return allSections;
+/**
+ * -----------------------------------------------------------------------------
+ * 3. COMBINED FULL ARCHITECTURE DOCUMENT (HLD + LLD)
+ * -----------------------------------------------------------------------------
+ */
+export function generateFullDocument(
+  projectData: Omit<DesignDocProject, "documentSections"> & {
+    selectedSectionIds?: string[];
+  }
+): DocumentSection[] {
+  const hld = generateHldDocument(projectData);
+  const lld = generateLldDocument(projectData);
+  return [...hld, ...lld];
+}
+
+/**
+ * -----------------------------------------------------------------------------
+ * 4. STANDARD DISPATCHER
+ * -----------------------------------------------------------------------------
+ */
+export function generateStandardDocument(
+  projectData: Omit<DesignDocProject, "documentSections"> & {
+    selectedSectionIds?: string[];
+    designLevel?: DesignLevel;
+  },
+  overrideLevel?: DesignLevel
+): DocumentSection[] {
+  const level: DesignLevel = overrideLevel || projectData.designLevel || "hld";
+
+  if (level === "lld") {
+    return generateLldDocument(projectData);
+  }
+  if (level === "full") {
+    return generateFullDocument(projectData);
+  }
+  return generateHldDocument(projectData);
 }
