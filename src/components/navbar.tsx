@@ -27,6 +27,8 @@ import {
   FolderKanban,
   LifeBuoy,
   MessageSquareHeart,
+  Menu,
+  X,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
 import { useSupportStore } from "@/store/use-support-store";
@@ -71,6 +73,7 @@ export const Navbar: React.FC = () => {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -245,7 +248,7 @@ export const Navbar: React.FC = () => {
             {/* Templates Library */}
             <button
               onClick={() => setIsTemplatesOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
               title="Browse reference architecture templates"
             >
               <Layers className="w-3.5 h-3.5 text-indigo-400" />
@@ -255,7 +258,7 @@ export const Navbar: React.FC = () => {
             {/* AI Settings / Vault */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="relative p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+              className="hidden lg:flex relative p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
               title="AI Provider & Key Vault Settings"
             >
               <Settings className="w-4 h-4 text-slate-300" />
@@ -267,7 +270,7 @@ export const Navbar: React.FC = () => {
             {/* Support Desk & Issue Tracking */}
             <button
               onClick={() => setSupportModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
               title="Support Desk & Issue Ticket Tracking"
             >
               <LifeBuoy className="w-3.5 h-3.5 text-cyan-400" />
@@ -282,11 +285,21 @@ export const Navbar: React.FC = () => {
             {/* Feedback */}
             <button
               onClick={() => setFeedbackModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
               title="Share Feedback & Suggestions"
             >
               <MessageSquareHeart className="w-3.5 h-3.5 text-pink-400" />
               <span className="hidden xl:inline">Feedback</span>
+            </button>
+
+            {/* Mobile / Tablet Menu Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white xl:hidden transition flex items-center justify-center"
+              title={isMobileMenuOpen ? "Close Menu" : "Open Navigation Menu"}
+            >
+              {isMobileMenuOpen ? <X className="w-4 h-4 text-indigo-400" /> : <Menu className="w-4 h-4" />}
             </button>
 
             {/* Export Dropdown */}
@@ -416,7 +429,7 @@ export const Navbar: React.FC = () => {
                   resetProject();
                 }
               }}
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+              className="hidden md:flex p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
               title="Reset Project"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -424,6 +437,318 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Mobile & Tablet Navigation Drawer (Slide-down for screens < xl) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 top-16 z-30 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800 xl:hidden overflow-y-auto animate-in slide-in-from-top-2 p-4 sm:p-6 pb-24 text-xs">
+          <div className="max-w-lg mx-auto space-y-5">
+            {/* Stepper Navigation */}
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                Workflow Phases
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  onClick={() => {
+                    setActiveTab("wizard");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "wizard"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
+                    <span>1. Requirements Intake</span>
+                  </div>
+                  {activeTab === "wizard" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("recommender");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "recommender"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
+                    <span>2. AI Recommender & Stack</span>
+                  </div>
+                  {activeTab === "recommender" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("studio");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "studio"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
+                    <span>3. Document Studio</span>
+                  </div>
+                  {activeTab === "studio" && <Check className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Design Level Quick Switch */}
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                Architecture Level
+              </span>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-900 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => {
+                    setDesignLevel("hld");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`py-2 rounded-lg font-bold transition text-center ${
+                    currentProject.designLevel === "hld"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  HLD
+                </button>
+                <button
+                  onClick={() => {
+                    setDesignLevel("lld");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`py-2 rounded-lg font-bold transition text-center ${
+                    currentProject.designLevel === "lld"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  LLD
+                </button>
+                <button
+                  onClick={() => {
+                    setDesignLevel("full");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`py-2 rounded-lg font-bold transition text-center ${
+                    currentProject.designLevel === "full"
+                      ? "bg-cyan-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  Full
+                </button>
+              </div>
+            </div>
+
+            {/* Platform Utilities */}
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                Studio Tools & Management
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setIsProjectsOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <FolderKanban className="w-4 h-4 text-indigo-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">Projects & Drafts</div>
+                    <div className="text-[10px] text-slate-500">{savedProjects.length} saved</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsTemplatesOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <Layers className="w-4 h-4 text-cyan-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">Templates</div>
+                    <div className="text-[10px] text-slate-500">Presets & architectures</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSupportModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <LifeBuoy className="w-4 h-4 text-emerald-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">Support Desk</div>
+                    <div className="text-[10px] text-slate-500">Log tickets & track</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setFeedbackModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <MessageSquareHeart className="w-4 h-4 text-pink-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">Give Feedback</div>
+                    <div className="text-[10px] text-slate-500">Rate experience</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSettingsOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">API Key Vault</div>
+                    <div className="text-[10px] text-slate-500">{aiConfig?.hasKey ? "Key configured" : "No key"}</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm("Reset current project to initial baseline?")) {
+                      resetProject();
+                      setIsMobileMenuOpen(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
+                >
+                  <RotateCcw className="w-4 h-4 text-amber-400" />
+                  <div className="text-left">
+                    <div className="font-semibold">Reset Project</div>
+                    <div className="text-[10px] text-slate-500">Clean baseline</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* User Session */}
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+              {isAuthenticated ? (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center font-bold text-xs text-white">
+                      {user?.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-200">@{user?.username}</div>
+                      <div className="text-[10px] text-slate-500">{user?.email}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-950/60 border border-red-800/60 text-red-300 hover:text-white text-xs font-semibold"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    openAuthModal("signin");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-center"
+                >
+                  Sign In to Studio
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Mobile Bottom Navigation Bar (Phones & Small Tablets) */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 py-1.5 px-3 flex md:hidden items-center justify-around shadow-2xl">
+        <button
+          onClick={() => {
+            setActiveTab("wizard");
+            setIsMobileMenuOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+            activeTab === "wizard" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
+          <span className="text-[10px]">Intake</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("recommender");
+            setIsMobileMenuOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+            activeTab === "recommender" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
+          <span className="text-[10px]">Stack</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("studio");
+            setIsMobileMenuOpen(false);
+          }}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition relative ${
+            activeTab === "studio" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
+          <span className="text-[10px]">Studio</span>
+          <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-cyan-400" />
+        </button>
+
+        <button
+          onClick={() => {
+            setIsProjectsOpen(true);
+            setIsMobileMenuOpen(false);
+          }}
+          className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-slate-400 hover:text-slate-200 transition"
+        >
+          <FolderKanban className="w-4 h-4 text-indigo-400" />
+          <span className="text-[10px]">Drafts</span>
+        </button>
+
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition ${
+            isMobileMenuOpen ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          <span className="text-[10px]">Menu</span>
+        </button>
+      </div>
 
       {/* Modals */}
       <ProjectsModal isOpen={isProjectsOpen} onClose={() => setIsProjectsOpen(false)} />

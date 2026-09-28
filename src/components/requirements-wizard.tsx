@@ -194,7 +194,7 @@ export const RequirementsWizard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 pb-24 md:pb-8">
       {/* Hero Banner & Presets Bar */}
       <div className="mb-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
@@ -330,66 +330,66 @@ export const RequirementsWizard: React.FC = () => {
           <button
             type="button"
             onClick={() => setStepIndex(1)}
-            className={`flex items-center gap-2 p-3 rounded-xl border text-left transition ${
+            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
               stepIndex === 1
                 ? "border-indigo-500 bg-indigo-950/40 text-white"
                 : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
             }`}
           >
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                 stepIndex === 1 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
               }`}
             >
               1
             </div>
-            <div>
-              <div className="font-semibold text-xs text-slate-200">Project Basics</div>
-              <div className="text-[10px] text-slate-400">Scale, Domain, Audience</div>
+            <div className="min-w-0">
+              <div className="font-semibold text-xs text-slate-200 truncate">Project Basics</div>
+              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Scale, Domain, Audience</div>
             </div>
           </button>
 
           <button
             type="button"
             onClick={() => setStepIndex(2)}
-            className={`flex items-center gap-2 p-3 rounded-xl border text-left transition ${
+            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
               stepIndex === 2
                 ? "border-indigo-500 bg-indigo-950/40 text-white"
                 : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
             }`}
           >
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                 stepIndex === 2 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
               }`}
             >
               2
             </div>
-            <div>
-              <div className="font-semibold text-xs text-slate-200">Core Capabilities</div>
-              <div className="text-[10px] text-slate-400">Features, SLAs, Compliance</div>
+            <div className="min-w-0">
+              <div className="font-semibold text-xs text-slate-200 truncate">Capabilities</div>
+              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Features, SLAs, Compliance</div>
             </div>
           </button>
 
           <button
             type="button"
             onClick={() => setStepIndex(3)}
-            className={`flex items-center gap-2 p-3 rounded-xl border text-left transition ${
+            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
               stepIndex === 3
                 ? "border-indigo-500 bg-indigo-950/40 text-white"
                 : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
             }`}
           >
             <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                 stepIndex === 3 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
               }`}
             >
               3
             </div>
-            <div>
-              <div className="font-semibold text-xs text-slate-200">Constraints & Cloud</div>
-              <div className="text-[10px] text-slate-400">Budget, Topology, Legacy</div>
+            <div className="min-w-0">
+              <div className="font-semibold text-xs text-slate-200 truncate">Constraints</div>
+              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Budget, Topology, Cloud</div>
             </div>
           </button>
         </div>
@@ -496,7 +496,7 @@ export const RequirementsWizard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStepIndex(2)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition"
               >
                 <span>Next: Core Capabilities</span>
                 <ArrowRight className="w-4 h-4" />
@@ -630,11 +630,11 @@ export const RequirementsWizard: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setStepIndex(1)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
@@ -642,7 +642,7 @@ export const RequirementsWizard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStepIndex(3)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition"
               >
                 <span>Next: Constraints & Cloud</span>
                 <ArrowRight className="w-4 h-4" />
@@ -693,11 +693,11 @@ export const RequirementsWizard: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setStepIndex(2)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
@@ -705,7 +705,7 @@ export const RequirementsWizard: React.FC = () => {
 
               <button
                 type="submit"
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5"
+                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Analyze & Recommend Architecture</span>
