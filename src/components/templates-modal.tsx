@@ -29,6 +29,7 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({ isOpen, onClose 
     customTemplates,
     deleteCustomTemplate,
     saveCurrentAsTemplate,
+    startBlankProject,
     currentProject,
     setActiveTab,
   } = useDocStore();
@@ -56,7 +57,12 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({ isOpen, onClose 
   };
 
   const handleSelectPreset = (id: string) => {
-    loadPresetTemplate(id);
+    loadPresetTemplate(id, currentProject.designLevel);
+    onClose();
+  };
+
+  const handleStartBlank = (level: "hld" | "lld" | "full" = "hld") => {
+    startBlankProject("Custom Architecture Specification", "Enterprise Architecture", level);
     onClose();
   };
 
@@ -133,8 +139,41 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({ isOpen, onClose 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-5">
           {activeTab === "presets" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {PRESET_TEMPLATES.map((tpl) => (
+            <div className="space-y-4">
+              {/* Blank Project / Clean Slate Card */}
+              <div className="p-4 rounded-xl border border-indigo-500/40 bg-indigo-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                    <span className="font-bold text-white text-sm">Blank Architecture Canvas</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-800/60 text-emerald-400 font-semibold uppercase">
+                      Zero Demo Data
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Start with a fresh, clean slate. Completely free of demo records, ready for manual input or AI generation.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleStartBlank("hld")}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow"
+                  >
+                    Start Blank HLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleStartBlank("lld")}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow"
+                  >
+                    Start Blank LLD
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {PRESET_TEMPLATES.map((tpl) => (
                 <div
                   key={tpl.id}
                   className="flex flex-col justify-between p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-indigo-500/60 hover:bg-slate-900/60 transition group"
@@ -176,6 +215,7 @@ export const TemplatesModal: React.FC<TemplatesModalProps> = ({ isOpen, onClose 
                   </button>
                 </div>
               ))}
+              </div>
             </div>
           )}
 

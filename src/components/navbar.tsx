@@ -24,11 +24,13 @@ import {
   ShieldCheck,
   ShieldAlert,
   Clock,
+  FolderKanban,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
 import { TemplatesModal } from "./templates-modal";
 import { SettingsModal } from "./settings-modal";
 import { AuthModal } from "./auth-modal";
+import { ProjectsModal } from "./projects-modal";
 
 export const Navbar: React.FC = () => {
   const {
@@ -36,6 +38,10 @@ export const Navbar: React.FC = () => {
     setActiveTab,
     currentProject,
     resetProject,
+    setDesignLevel,
+    startBlankProject,
+    savedProjects,
+    lastSavedAt,
   } = useDocStore();
 
   const {
@@ -46,6 +52,7 @@ export const Navbar: React.FC = () => {
     openAuthModal,
   } = useAuthStore();
 
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -116,13 +123,50 @@ export const Navbar: React.FC = () => {
                 <span className="font-extrabold text-base tracking-tight text-white">
                   DocArch <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">AI</span>
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  HLD / LLD
-                </span>
+                
+                {/* HLD / LLD Quick Toggle */}
+                <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("hld")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "hld"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-emerald-300"
+                    }`}
+                    title="High-Level Design Mode"
+                  >
+                    HLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("lld")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "lld"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-indigo-300"
+                    }`}
+                    title="Low-Level Design Mode"
+                  >
+                    LLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDesignLevel("full")}
+                    className={`px-1.5 py-0.5 rounded font-bold transition ${
+                      currentProject.designLevel === "full"
+                        ? "bg-cyan-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-cyan-300"
+                    }`}
+                    title="Full Architecture Mode (HLD + LLD)"
+                  >
+                    Full
+                  </button>
+                </div>
               </div>
-              <p className="text-[11px] text-slate-400 font-normal hidden sm:block">
-                Software Architecture & Technical Design Document Studio
-              </p>
+              <div className="text-[11px] text-slate-400 truncate max-w-[200px] hidden sm:block">
+                {currentProject.metadata.title}
+              </div>
             </div>
           </div>
 
@@ -168,6 +212,21 @@ export const Navbar: React.FC = () => {
 
           {/* Utility Actions & User Auth */}
           <div className="flex items-center gap-2">
+            {/* My Projects & Drafts */}
+            <button
+              onClick={() => setIsProjectsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Open My Projects & Drafts"
+            >
+              <FolderKanban className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Projects</span>
+              {savedProjects.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 font-bold">
+                  {savedProjects.length}
+                </span>
+              )}
+            </button>
+
             {/* Templates Library */}
             <button
               onClick={() => setIsTemplatesOpen(true)}
@@ -327,6 +386,7 @@ export const Navbar: React.FC = () => {
       </header>
 
       {/* Modals */}
+      <ProjectsModal isOpen={isProjectsOpen} onClose={() => setIsProjectsOpen(false)} />
       <TemplatesModal isOpen={isTemplatesOpen} onClose={() => setIsTemplatesOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <AuthModal />
