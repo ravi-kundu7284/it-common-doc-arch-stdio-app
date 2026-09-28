@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { requirementsFormSchema, RequirementsFormData } from "@/types";
@@ -101,6 +101,26 @@ export const RequirementsWizard: React.FC = () => {
       constraints: currentProject.requirements.constraints.join("\n"),
     },
   });
+
+  // Synchronize design level selection from Navbar or external triggers (vice-versa sync)
+  useEffect(() => {
+    if (currentProject.designLevel && currentProject.designLevel !== selectedLevel) {
+      setSelectedLevel(currentProject.designLevel);
+    }
+  }, [currentProject.designLevel]);
+
+  // Synchronize form fields when project changes
+  useEffect(() => {
+    setValue("title", currentProject.metadata.title);
+    setValue("domain", currentProject.requirements.domain);
+    setValue("rps", currentProject.requirements.targetScale.rps);
+    setValue("users", currentProject.requirements.targetScale.users);
+    setValue("dataRetention", currentProject.requirements.targetScale.dataRetention);
+    setValue("latency", currentProject.requirements.nonFunctionalRequirements.latency);
+    setValue("availability", currentProject.requirements.nonFunctionalRequirements.availability);
+    setSelectedCompliance(currentProject.requirements.nonFunctionalRequirements.compliance || []);
+    setFunctionalList(currentProject.requirements.functionalRequirements || []);
+  }, [currentProject.id, currentProject.metadata.title]);
 
   const toggleCompliance = (item: string) => {
     const next = selectedCompliance.includes(item)

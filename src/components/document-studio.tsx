@@ -199,6 +199,17 @@ export const DocumentStudio: React.FC = () => {
     }
   }, [activeSection?.id]);
 
+  // Sync section filter when design level is changed from Navbar or other triggers
+  useEffect(() => {
+    if (designLevel === "hld") {
+      setSectionFilter("hld");
+    } else if (designLevel === "lld") {
+      setSectionFilter("lld");
+    } else {
+      setSectionFilter("all");
+    }
+  }, [designLevel]);
+
   const handleEditorChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setEditorText(val);

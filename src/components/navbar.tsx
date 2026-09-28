@@ -25,12 +25,17 @@ import {
   ShieldAlert,
   Clock,
   FolderKanban,
+  LifeBuoy,
+  MessageSquareHeart,
 } from "lucide-react";
 import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
+import { useSupportStore } from "@/store/use-support-store";
 import { TemplatesModal } from "./templates-modal";
 import { SettingsModal } from "./settings-modal";
 import { AuthModal } from "./auth-modal";
 import { ProjectsModal } from "./projects-modal";
+import { SupportModal } from "./support-modal";
+import { FeedbackModal } from "./feedback-modal";
 
 export const Navbar: React.FC = () => {
   const {
@@ -51,6 +56,16 @@ export const Navbar: React.FC = () => {
     logout,
     openAuthModal,
   } = useAuthStore();
+
+  const {
+    tickets,
+    setSupportModalOpen,
+    setFeedbackModalOpen,
+  } = useSupportStore();
+
+  const openTicketsCount = tickets.filter(
+    (t) => t.status === "open" || t.status === "in_review" || t.status === "in_progress"
+  ).length;
 
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -249,6 +264,31 @@ export const Navbar: React.FC = () => {
               )}
             </button>
 
+            {/* Support Desk & Issue Tracking */}
+            <button
+              onClick={() => setSupportModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Support Desk & Issue Ticket Tracking"
+            >
+              <LifeBuoy className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden xl:inline">Support</span>
+              {openTicketsCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-900/80 text-blue-300 font-bold border border-blue-700/50">
+                  {openTicketsCount}
+                </span>
+              )}
+            </button>
+
+            {/* Feedback */}
+            <button
+              onClick={() => setFeedbackModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Share Feedback & Suggestions"
+            >
+              <MessageSquareHeart className="w-3.5 h-3.5 text-pink-400" />
+              <span className="hidden xl:inline">Feedback</span>
+            </button>
+
             {/* Export Dropdown */}
             <div className="relative" ref={dropdownRef}>
               <button
@@ -390,6 +430,8 @@ export const Navbar: React.FC = () => {
       <TemplatesModal isOpen={isTemplatesOpen} onClose={() => setIsTemplatesOpen(false)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <AuthModal />
+      <SupportModal />
+      <FeedbackModal />
     </>
   );
 };

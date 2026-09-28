@@ -111,3 +111,63 @@ export const requirementsFormSchema = z.object({
 });
 
 export type RequirementsFormData = z.infer<typeof requirementsFormSchema>;
+
+export interface TicketComment {
+  id: string;
+  author: string;
+  message: string;
+  timestamp: string;
+  isStaff: boolean;
+}
+
+export type TicketCategory =
+  | "bug"
+  | "feature"
+  | "architecture"
+  | "performance"
+  | "account"
+  | "other";
+
+export type TicketPriority = "low" | "medium" | "high" | "critical";
+
+export type TicketStatus = "open" | "in_review" | "in_progress" | "resolved" | "closed";
+
+export interface SupportTicket {
+  id: string;
+  ticketNumber: string; // e.g. TKT-7482
+  subject: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  description: string;
+  userEmail: string;
+  userName?: string;
+  createdAt: string;
+  updatedAt: string;
+  diagnostics?: {
+    projectTitle?: string;
+    designLevel?: string;
+    browser?: string;
+    os?: string;
+  };
+  comments: TicketComment[];
+}
+
+export type FeedbackCategory =
+  | "overall"
+  | "ai_quality"
+  | "diagrams"
+  | "export"
+  | "templates"
+  | "other";
+
+export interface UserFeedback {
+  id: string;
+  rating: number; // 1 - 5
+  category: FeedbackCategory;
+  likes: string;
+  improvements: string;
+  recommendScore: number; // 0 - 10 NPS
+  userEmail?: string;
+  createdAt: string;
+}

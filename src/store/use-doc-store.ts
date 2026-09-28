@@ -64,6 +64,10 @@ interface DocState {
   loadSavedProject: (projectId: string) => void;
   deleteSavedProject: (projectId: string) => void;
   duplicateSavedProject: (projectId: string) => void;
+  updateSavedProject: (
+    projectId: string,
+    partial: { title?: string; domain?: string; designLevel?: DesignLevel }
+  ) => void;
   createNewProject: (title?: string, domain?: string, level?: DesignLevel) => void;
 }
 
@@ -256,6 +260,61 @@ export const useDocStore = create<DocState>()(
         set((state) => ({
           savedProjects: [clonedSummary, ...state.savedProjects],
         }));
+      },
+
+      updateSavedProject: (projectId, partial) => {
+        set((state) => {
+          const updatedDrafts = state.savedProjects.map((p) => {
+            if (p.id !== projectId) return p;
+
+            const updatedProject: DesignDocProject = {
+              ...p.project,
+              metadata: {
+                ...p.project.metadata,
+                title: partial.title !== undefined ? partial.title : p.project.metadata.title,
+                lastUpdated: new Date().toISOString().split("T")[0],
+              },
+              requirements: {
+                ...p.project.requirements,
+                domain: partial.domain !== undefined ? partial.domain : p.project.requirements.domain,
+              },
+              designLevel: partial.designLevel !== undefined ? partial.designLevel : p.project.designLevel,
+            };
+
+            // If title changed, sync across document sections
+            if (partial.title && partial.title.trim() && partial.title !== p.title) {
+              updatedProject.documentSections = syncTitleAcrossSections(
+                updatedProject.documentSections,
+                p.title,
+                partial.title.trim()
+              );
+            }
+
+            return {
+              ...p,
+              title: partial.title !== undefined ? partial.title : p.title,
+              domain: partial.domain !== undefined ? partial.domain : p.domain,
+              designLevel: partial.designLevel !== undefined ? partial.designLevel : p.designLevel,
+              lastUpdated: new Date().toLocaleString(),
+              project: updatedProject,
+            };
+          });
+
+          // If the edited draft is the currently active project, update currentProject too
+          let nextCurrent = state.currentProject;
+          if (state.currentProject.id === projectId) {
+            const found = updatedDrafts.find((p) => p.id === projectId);
+            if (found) {
+              nextCurrent = JSON.parse(JSON.stringify(found.project));
+            }
+          }
+
+          return {
+            savedProjects: updatedDrafts,
+            currentProject: nextCurrent,
+            lastSavedAt: formatNow(),
+          };
+        });
       },
 
       createNewProject: (title, domain, level = "hld") => {
