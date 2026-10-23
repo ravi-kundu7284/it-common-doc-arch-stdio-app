@@ -16,6 +16,8 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   ExternalLink,
   LogIn,
@@ -49,6 +51,7 @@ export const Navbar: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
+    setActiveStep,
     currentProject,
     resetProject,
     setDesignLevel,
@@ -56,6 +59,27 @@ export const Navbar: React.FC = () => {
     savedProjects,
     lastSavedAt,
   } = useDocStore();
+
+  const STEP_TABS = ["wizard", "recommender", "studio", "diagrams", "workflows", "traceability", "adrs", "quality"] as const;
+  const currentStepIdx = STEP_TABS.indexOf(activeTab as any);
+  const hasPrevStep = currentStepIdx > 0;
+  const hasNextStep = currentStepIdx !== -1 && currentStepIdx < STEP_TABS.length - 1;
+
+  const handlePrevStep = () => {
+    if (hasPrevStep) {
+      const prevTab = STEP_TABS[currentStepIdx - 1];
+      setActiveTab(prevTab);
+      setActiveStep(currentStepIdx);
+    }
+  };
+
+  const handleNextStep = () => {
+    if (hasNextStep) {
+      const nextTab = STEP_TABS[currentStepIdx + 1];
+      setActiveTab(nextTab);
+      setActiveStep(currentStepIdx + 2);
+    }
+  };
 
   const {
     user,
@@ -472,8 +496,20 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Tier 2: Dedicated Studio Workspace Tabs Navigation Bar */}
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-11 flex items-center bg-slate-950/75 border-t border-slate-900">
-          <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 w-full text-xs font-medium">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-11 flex items-center bg-slate-950/75 border-t border-slate-900 justify-between gap-2">
+          {/* Previous Step Button */}
+          <button
+            type="button"
+            onClick={handlePrevStep}
+            disabled={!hasPrevStep}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-25 disabled:hover:bg-slate-900 disabled:hover:text-slate-500 transition shrink-0 text-xs font-semibold"
+            title={hasPrevStep ? `Previous Step (Alt+[): ${STEP_TABS[currentStepIdx - 1]}` : "Already at Step 1"}
+          >
+            <ChevronLeft className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Prev Step</span>
+          </button>
+
+          <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-xs font-medium flex-1">
             <button
               onClick={() => setActiveTab("wizard")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
@@ -563,6 +599,18 @@ export const Navbar: React.FC = () => {
               <span>8. Architecture Quality Audit</span>
             </button>
           </nav>
+
+          {/* Next Step Button */}
+          <button
+            type="button"
+            onClick={handleNextStep}
+            disabled={!hasNextStep}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 hover:text-white hover:bg-indigo-600 disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition shrink-0 text-xs font-semibold"
+            title={hasNextStep ? `Next Step (Alt+]): ${STEP_TABS[currentStepIdx + 1]}` : "Already at final step"}
+          >
+            <span className="hidden sm:inline">Next Step</span>
+            <ChevronRight className="w-3.5 h-3.5 text-indigo-300" />
+          </button>
         </div>
       </header>
 
