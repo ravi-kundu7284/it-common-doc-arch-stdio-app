@@ -14,6 +14,8 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   Download,
   Copy,
@@ -41,8 +43,11 @@ import {
   Tag,
   MessageSquare,
   FileStack,
+  Edit3,
   CheckCircle2,
   Search,
+  AlertTriangle,
+  Settings,
 } from "lucide-react";
 import {
   generateStandaloneHtml,
@@ -186,20 +191,134 @@ interface SectionPreviewCardProps {
     title: string;
     contentMarkdown: string;
     level?: string;
+    isLocked?: boolean;
   };
   isActive: boolean;
+  sectionIndex: number;
+  totalSections: number;
+  hasPrev: boolean;
+  hasNext: boolean;
+  prevTitle?: string;
+  nextTitle?: string;
+  onSelect: (id: string) => void;
+  onPrev: () => void;
+  onNext: () => void;
 }
 
 const SectionPreviewCard = React.memo<SectionPreviewCardProps>(
-  ({ section, isActive }) => {
+  ({
+    section,
+    isActive,
+    sectionIndex,
+    totalSections,
+    hasPrev,
+    hasNext,
+    prevTitle,
+    nextTitle,
+    onSelect,
+    onPrev,
+    onNext,
+  }) => {
     return (
       <section
         id={section.id}
-        className={`scroll-mt-12 transition-all p-4 rounded-2xl ${
-          isActive ? "ring-1 ring-indigo-500/40 bg-indigo-950/10" : ""
-        }`}
+        className={`scroll-mt-14 transition-all rounded-2xl border ${
+          isActive
+            ? "border-indigo-500/50 bg-indigo-950/20 shadow-xl shadow-indigo-950/25 ring-1 ring-indigo-500/30"
+            : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700/80"
+        } p-4 sm:p-5 space-y-3.5`}
       >
+        {/* Section Header Controls Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="px-2 py-0.5 rounded-md bg-indigo-950/80 border border-indigo-700/50 text-indigo-300 font-mono text-[10px] font-bold shrink-0">
+              {sectionIndex + 1}/{totalSections}
+            </span>
+            <span className="font-bold text-slate-100 truncate">
+              {section.title.replace(/^\d+\.\s*/, "")}
+            </span>
+            {section.level && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 uppercase font-semibold shrink-0">
+                {section.level}
+              </span>
+            )}
+            {section.isLocked && (
+              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded shrink-0">
+                <Lock className="w-2.5 h-2.5" />
+                <span>Locked</span>
+              </span>
+            )}
+          </div>
+
+          {/* Section Action & Moving Buttons */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={!hasPrev}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-20 border border-slate-800 text-[11px] font-semibold transition"
+              title={hasPrev ? `Previous Section: "${prevTitle}"` : "First Section"}
+            >
+              <ChevronLeft className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Prev</span>
+            </button>
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={!hasNext}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white disabled:opacity-20 border border-slate-800 text-[11px] font-semibold transition"
+              title={hasNext ? `Next Section: "${nextTitle}"` : "Last Section"}
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5 text-indigo-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelect(section.id)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition border ${
+                isActive
+                  ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
+              }`}
+              title="Focus and edit this section"
+            >
+              <Edit3 className="w-3 h-3" />
+              <span>{isActive ? "Active in Editor" : "Edit"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Rendered Markdown Body */}
         <MarkdownViewer content={section.contentMarkdown} />
+
+        {/* Section Bottom Transition Buttons */}
+        <div className="pt-2.5 border-t border-slate-800/60 flex items-center justify-between gap-2 text-xs text-slate-400">
+          <button
+            type="button"
+            onClick={onPrev}
+            disabled={!hasPrev}
+            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-300 disabled:opacity-20 transition truncate max-w-[42%]"
+            title={prevTitle ? `Go to: ${prevTitle}` : "Beginning"}
+          >
+            <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{prevTitle ? `Prev: ${prevTitle}` : "Start of Document"}</span>
+          </button>
+
+          <span className="text-[10px] font-mono text-slate-500 shrink-0">
+            Section {sectionIndex + 1} of {totalSections}
+          </span>
+
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!hasNext}
+            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-300 disabled:opacity-20 transition truncate max-w-[42%]"
+            title={nextTitle ? `Go to: ${nextTitle}` : "End"}
+          >
+            <span className="truncate">{nextTitle ? `Next: ${nextTitle}` : "End of Document"}</span>
+            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+          </button>
+        </div>
       </section>
     );
   },
@@ -208,7 +327,11 @@ const SectionPreviewCard = React.memo<SectionPreviewCardProps>(
       prev.isActive === next.isActive &&
       prev.section.id === next.section.id &&
       prev.section.contentMarkdown === next.section.contentMarkdown &&
-      prev.section.title === next.section.title
+      prev.section.title === next.section.title &&
+      prev.sectionIndex === next.sectionIndex &&
+      prev.totalSections === next.totalSections &&
+      prev.hasPrev === next.hasPrev &&
+      prev.hasNext === next.hasNext
     );
   }
 );
@@ -248,6 +371,7 @@ export const DocumentStudio: React.FC = () => {
   const [editorText, setEditorText] = useState(activeSection?.contentMarkdown || "");
   const [aiInstruction, setAiInstruction] = useState("");
   const [isAiRefining, setIsAiRefining] = useState(false);
+  const [aiError, setAiError] = useState<{ code?: string; message: string } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
@@ -313,6 +437,67 @@ export const DocumentStudio: React.FC = () => {
       }
     });
   };
+
+  const currentDocList = currentProject.documents || [];
+  const currentDocIdx = currentDocList.findIndex(
+    (d) => d.id === currentProject.activeDocumentId || d.type === activeDocumentType
+  );
+  const hasPrevDoc = currentDocIdx > 0;
+  const hasNextDoc = currentDocIdx !== -1 && currentDocIdx < currentDocList.length - 1;
+  const prevDoc = hasPrevDoc ? currentDocList[currentDocIdx - 1] : null;
+  const nextDoc = hasNextDoc ? currentDocList[currentDocIdx + 1] : null;
+
+  const currentSectionIndex = documentSections.findIndex((s) => s.id === activeSection?.id);
+  const hasPrevSection = currentSectionIndex > 0;
+  const hasNextSection = currentSectionIndex !== -1 && currentSectionIndex < documentSections.length - 1;
+
+  const canMovePrev = hasPrevSection || hasPrevDoc;
+  const canMoveNext = hasNextSection || hasNextDoc;
+
+  const handlePrevSection = () => {
+    if (hasPrevSection) {
+      const prevSection = documentSections[currentSectionIndex - 1];
+      handleSelectSection(prevSection.id);
+    } else if (hasPrevDoc && prevDoc) {
+      setActiveDocumentType(prevDoc.type);
+      const targetSec = prevDoc.sections && prevDoc.sections.length > 0
+        ? prevDoc.sections[prevDoc.sections.length - 1].id
+        : null;
+      if (targetSec) {
+        setSelectedSectionId(targetSec);
+      }
+    }
+  };
+
+  const handleNextSection = () => {
+    if (hasNextSection) {
+      const nextSection = documentSections[currentSectionIndex + 1];
+      handleSelectSection(nextSection.id);
+    } else if (hasNextDoc && nextDoc) {
+      setActiveDocumentType(nextDoc.type);
+      const targetSec = nextDoc.sections && nextDoc.sections.length > 0
+        ? nextDoc.sections[0].id
+        : null;
+      if (targetSec) {
+        setSelectedSectionId(targetSec);
+      }
+    }
+  };
+
+  // Keyboard Navigation: Alt+ArrowLeft for Prev, Alt+ArrowRight for Next
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevSection();
+      } else if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNextSection();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentSectionIndex, documentSections, currentDocIdx, currentDocList]);
 
   // Sync section filter when design level is changed from Navbar or other triggers
   useEffect(() => {
@@ -382,11 +567,13 @@ export const DocumentStudio: React.FC = () => {
   const handleAiRefine = async () => {
     if (!aiInstruction.trim() || !activeSection) return;
     setIsAiRefining(true);
+    setAiError(null);
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           promptType: "refine_section",
           projectData: currentProject,
@@ -397,6 +584,14 @@ export const DocumentStudio: React.FC = () => {
       });
 
       const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAiError({
+          code: data.code || "AI_ERROR",
+          message: data.error || "Failed to refine section with OpenAI.",
+        });
+        return;
+      }
+
       if (data.success && data.content) {
         // Show visual diff modal to inspect changes before applying
         setDiffModal({
@@ -407,8 +602,12 @@ export const DocumentStudio: React.FC = () => {
         });
         setAiInstruction("");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI refine error:", err);
+      setAiError({
+        code: "NETWORK_ERROR",
+        message: err?.message || "Failed to connect to AI generation service.",
+      });
     } finally {
       setIsAiRefining(false);
     }
@@ -1200,6 +1399,45 @@ export const DocumentStudio: React.FC = () => {
                     <span>{activeSection.isLocked ? "Locked" : "Lock"}</span>
                   </button>
                 )}
+
+                {/* Prev / Next Quick Section Navigator */}
+                <div className="flex items-center gap-0.5 bg-slate-900 border border-slate-800 rounded-lg p-0.5 shrink-0 ml-1">
+                  <button
+                    type="button"
+                    onClick={handlePrevSection}
+                    disabled={!canMovePrev}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition"
+                    title={
+                      hasPrevSection
+                        ? `Move to previous section (Alt+Left): "${documentSections[currentSectionIndex - 1]?.title}"`
+                        : hasPrevDoc
+                        ? `Move to previous document (Alt+Left): "${prevDoc?.title}"`
+                        : "Already at start of project documentation"
+                    }
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Prev</span>
+                  </button>
+                  <span className="text-[10px] font-mono text-slate-400 px-1.5 border-x border-slate-800 shrink-0">
+                    {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1}/{documentSections.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleNextSection}
+                    disabled={!canMoveNext}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition"
+                    title={
+                      hasNextSection
+                        ? `Move to next section (Alt+Right): "${documentSections[currentSectionIndex + 1]?.title}"`
+                        : hasNextDoc
+                        ? `Advance to next document (Alt+Right): "${nextDoc?.title}"`
+                        : "Already at end of project documentation"
+                    }
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Diagram Inserters */}
@@ -1258,6 +1496,89 @@ export const DocumentStudio: React.FC = () => {
                 spellCheck={false}
               />
             </div>
+
+            {/* Section Transition Bar (Prev / Next Section) */}
+            <div className="px-3.5 py-2 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handlePrevSection}
+                disabled={!canMovePrev}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:hover:bg-slate-950 disabled:hover:text-slate-400 transition truncate max-w-[42%]"
+                title={
+                  hasPrevSection
+                    ? `Previous (Alt+Left): ${documentSections[currentSectionIndex - 1]?.title}`
+                    : hasPrevDoc
+                    ? `Previous Document (Alt+Left): ${prevDoc?.title}`
+                    : "First section"
+                }
+              >
+                <ChevronLeft className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="truncate">
+                  {hasPrevSection
+                    ? `Prev: ${documentSections[currentSectionIndex - 1]?.title}`
+                    : hasPrevDoc
+                    ? `Prev Doc: ${prevDoc?.title}`
+                    : "First Section"}
+                </span>
+              </button>
+
+              <div className="text-[11px] text-slate-400 font-mono text-center shrink-0">
+                Section {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1} of {documentSections.length}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextSection}
+                disabled={!canMoveNext}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:hover:bg-slate-950 disabled:hover:text-slate-400 transition truncate max-w-[42%]"
+                title={
+                  hasNextSection
+                    ? `Next (Alt+Right): ${documentSections[currentSectionIndex + 1]?.title}`
+                    : hasNextDoc
+                    ? `Advance to Next Document (Alt+Right): ${nextDoc?.title}`
+                    : "Last section"
+                }
+              >
+                <span className="truncate">
+                  {hasNextSection
+                    ? `Next: ${documentSections[currentSectionIndex + 1]?.title}`
+                    : hasNextDoc
+                    ? `Next Doc: ${nextDoc?.title}`
+                    : "Last Section"}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              </button>
+            </div>
+
+            {/* AI Error Alert Banner */}
+            {aiError && (
+              <div className="px-3.5 py-2.5 bg-amber-950/40 border-t border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-200 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-medium">{aiError.message}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const btn = document.querySelector('[data-testid="settings-btn"]') as HTMLElement;
+                      if (btn) btn.click();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 hover:text-black border border-amber-400/40 text-[11px] font-bold text-amber-300 transition"
+                  >
+                    Configure Key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiError(null)}
+                    className="p-1 hover:text-white text-slate-400 transition"
+                    title="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* AI Assistant Bar */}
             <div className="p-3 bg-slate-900/80 border-t border-slate-800 flex items-center gap-2">
@@ -1395,13 +1716,87 @@ export const DocumentStudio: React.FC = () => {
 
             {/* Document Sections Content */}
             <div className="space-y-12">
-              {documentSections.map((sec) => (
-                <SectionPreviewCard
-                  key={sec.id}
-                  section={sec}
-                  isActive={sec.id === activeSection?.id}
-                />
-              ))}
+              {documentSections.map((sec, idx) => {
+                const secHasPrev = idx > 0;
+                const secHasNext = idx < documentSections.length - 1;
+                const prevTitle = secHasPrev ? documentSections[idx - 1].title : undefined;
+                const nextTitle = secHasNext ? documentSections[idx + 1].title : undefined;
+
+                return (
+                  <SectionPreviewCard
+                    key={sec.id}
+                    section={sec}
+                    isActive={sec.id === activeSection?.id}
+                    sectionIndex={idx}
+                    totalSections={documentSections.length}
+                    hasPrev={secHasPrev}
+                    hasNext={secHasNext}
+                    prevTitle={prevTitle}
+                    nextTitle={nextTitle}
+                    onSelect={(id) => handleSelectSection(id)}
+                    onPrev={() => {
+                      if (secHasPrev) handleSelectSection(documentSections[idx - 1].id);
+                    }}
+                    onNext={() => {
+                      if (secHasNext) handleSelectSection(documentSections[idx + 1].id);
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Document Bottom Navigation Bar (Prev / Next Section) */}
+            <div className="mt-12 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={handlePrevSection}
+                disabled={!canMovePrev}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:bg-slate-950 transition font-medium"
+                title={
+                  hasPrevSection
+                    ? `Move to previous section: ${documentSections[currentSectionIndex - 1]?.title}`
+                    : hasPrevDoc
+                    ? `Move to previous document: ${prevDoc?.title}`
+                    : "Already at start of document"
+                }
+              >
+                <ChevronLeft className="w-4 h-4 text-indigo-400" />
+                <span className="truncate max-w-xs">
+                  {hasPrevSection
+                    ? `Prev: ${documentSections[currentSectionIndex - 1]?.title}`
+                    : hasPrevDoc
+                    ? `Prev Doc: ${prevDoc?.title}`
+                    : "First Section"}
+                </span>
+              </button>
+
+              <div className="text-slate-400 font-mono text-[11px] text-center">
+                Viewing Section {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1} of {documentSections.length}
+                <span className="block text-[10px] text-slate-500 mt-0.5">Use Alt+Left / Alt+Right to navigate sections</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextSection}
+                disabled={!canMoveNext}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-30 transition shadow-md shadow-indigo-600/20"
+                title={
+                  hasNextSection
+                    ? `Move to next section: ${documentSections[currentSectionIndex + 1]?.title}`
+                    : hasNextDoc
+                    ? `Advance to next document: ${nextDoc?.title}`
+                    : "Already at end of document"
+                }
+              >
+                <span className="truncate max-w-xs">
+                  {hasNextSection
+                    ? `Next: ${documentSections[currentSectionIndex + 1]?.title}`
+                    : hasNextDoc
+                    ? `Next Doc: ${nextDoc?.title}`
+                    : "End of Document"}
+                </span>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </button>
             </div>
 
             {/* Document Footer */}
@@ -1501,6 +1896,28 @@ export const DocumentStudio: React.FC = () => {
 
                 {/* Custom Instruction Box */}
                 <div className="space-y-2 pt-2 border-t border-slate-800">
+                  {aiError && (
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-amber-300 block">AI Notice</span>
+                          <span className="text-[11px] leading-tight block text-amber-200/90">{aiError.message}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const btn = document.querySelector('[data-testid="settings-btn"]') as HTMLElement;
+                          if (btn) btn.click();
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 hover:text-black border border-amber-400/40 text-xs font-bold text-amber-300 transition"
+                      >
+                        Configure Key in Settings
+                      </button>
+                    </div>
+                  )}
+
                   <label className="block text-[11px] font-semibold text-slate-300">
                     Custom AI Instruction:
                   </label>

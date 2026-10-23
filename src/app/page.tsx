@@ -10,6 +10,7 @@ import { WorkflowDesigner } from "@/components/workflow-designer";
 import { RequirementsRegistry } from "@/components/requirements-registry";
 import { AdrManager } from "@/components/adr-manager";
 import { QualityAuditView } from "@/components/quality-audit-view";
+import { StepNavigationBar } from "@/components/step-navigation-bar";
 import { useDocStore } from "@/store/use-doc-store";
 import { useAuthStore } from "@/store/use-auth-store";
 import { LoginLanding } from "@/components/login-landing";
@@ -68,6 +69,8 @@ export default function Home() {
         {activeTab === "adrs" && <AdrManager />}
         {activeTab === "quality" && <QualityAuditView />}
       </div>
+
+      <StepNavigationBar />
     </main>
   );
 }

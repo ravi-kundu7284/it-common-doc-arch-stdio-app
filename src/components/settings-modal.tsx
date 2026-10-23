@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useDocStore } from "@/store/use-doc-store";
@@ -54,15 +54,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   // Sync state when modal opens or user/aiConfig changes
   useEffect(() => {
-    if (aiConfig) {
-      setProvider(aiConfig.provider);
-      setModelName(aiConfig.modelName);
-      if (aiConfig.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
-    } else {
-      setProvider(apiSettings.provider);
-      setModelName(apiSettings.modelName);
-      setApiKey(apiSettings.apiKey);
-    }
+    setProvider(apiSettings.provider || (aiConfig ? aiConfig.provider : "openai"));
+    setModelName(apiSettings.modelName || (aiConfig ? aiConfig.modelName : "gpt-4o"));
+    setApiKey(apiSettings.apiKey || "");
+    if (aiConfig?.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
   }, [aiConfig, apiSettings, isOpen]);
 
   if (!isOpen) return null;
@@ -71,31 +66,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setIsSaving(true);
     setFeedbackMsg(null);
 
+    const effectiveKey = apiKey.trim().length > 0 ? apiKey.trim() : apiSettings.apiKey;
+
     // Save in client doc store
     setApiSettings({
       provider,
-      apiKey,
+      apiKey: effectiveKey,
       modelName,
     });
 
     // If authenticated, also save and encrypt in Supabase PostgreSQL
-    if (isAuthenticated && apiKey.trim().length > 0) {
-      const res = await saveAiConfig(provider, modelName, apiKey, expiresInDays);
-      setIsSaving(false);
-      if (!res.success) {
-        setFeedbackMsg({ type: "error", text: res.error || "Failed to save key in database." });
-        return;
+    if (isAuthenticated && effectiveKey.length > 0) {
+      try {
+        const res = await saveAiConfig(provider, modelName, effectiveKey, expiresInDays);
+        if (res.success) {
+          setFeedbackMsg({
+            type: "success",
+            text: `Key encrypted with AES-256-GCM. Set to auto-purge in ${expiresInDays} days!`,
+          });
+        } else {
+          setFeedbackMsg({
+            type: "success",
+            text: `Active for session & browser storage. (Cloud DB offline)`,
+          });
+        }
+      } catch {
+        setFeedbackMsg({
+          type: "success",
+          text: `Active for session & browser storage.`,
+        });
       }
-      setFeedbackMsg({
-        type: "success",
-        text: `Key encrypted with AES-256-GCM. Set to auto-purge in ${expiresInDays} days!`,
-      });
-      setApiKey(""); // clear raw key from component state
     } else {
-      setIsSaving(false);
-      setFeedbackMsg({ type: "success", text: "Settings updated for current session." });
+      setFeedbackMsg({ type: "success", text: "Settings saved successfully." });
     }
 
+    setIsSaving(false);
     setTimeout(() => {
       onClose();
     }, 1200);
@@ -208,7 +213,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
-                onClick={() => setProvider("builtin")}
+                onClick={() => {
+                  setProvider("builtin");
+                  setModelName("builtin");
+                }}
                 className={`flex flex-col items-start p-3 rounded-xl border text-left transition ${
                   provider === "builtin"
                     ? "border-indigo-500 bg-indigo-950/40 text-white"
@@ -224,7 +232,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
               <button
                 type="button"
-                onClick={() => setProvider("gemini")}
+                onClick={() => {
+                  setProvider("gemini");
+                  if (!modelName || modelName.includes("gpt") || modelName === "builtin") {
+                    setModelName("gemini-1.5-pro");
+                  }
+                }}
                 className={`flex flex-col items-start p-3 rounded-xl border text-left transition ${
                   provider === "gemini"
                     ? "border-indigo-500 bg-indigo-950/40 text-white"
@@ -240,7 +253,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
               <button
                 type="button"
-                onClick={() => setProvider("openai")}
+                onClick={() => {
+                  setProvider("openai");
+                  if (!modelName || modelName.includes("gemini") || modelName === "builtin") {
+                    setModelName("gpt-4o");
+                  }
+                }}
                 className={`flex flex-col items-start p-3 rounded-xl border text-left transition ${
                   provider === "openai"
                     ? "border-indigo-500 bg-indigo-950/40 text-white"
@@ -260,9 +278,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           {provider !== "builtin" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Target Model Identifier
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Target Model Identifier
+                  </label>
+                  {provider === "openai" && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setModelName("gpt-4o")}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                          modelName === "gpt-4o"
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        gpt-4o
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModelName("gpt-4o-mini")}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                          modelName === "gpt-4o-mini"
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        gpt-4o-mini
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={modelName}
@@ -294,7 +340,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-200">Active Encrypted Key:</span>
                       <code className="font-mono text-indigo-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                        â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢{aiConfig.keyLast4}
+                        •••••••••••••••••{aiConfig.keyLast4}
                       </code>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
@@ -395,8 +441,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 pt-5 mt-4 border-t border-slate-800">
+        {/* Sticky Footer Actions */}
+        <div className="sticky bottom-0 bg-slate-900 pt-3 mt-4 border-t border-slate-800 flex items-center justify-end gap-2.5 z-10">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"

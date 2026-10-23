@@ -905,6 +905,51 @@ ${functionalRequirements.map((f, i) => `- **[P1 Deliverable]** ${f}`).join("\n")
 - Cross-cloud multi-master active-active write synchronizations prior to regional cutover.
 `,
     },
+    {
+      id: "overview-landscape",
+      title: "3. Solution Landscape & Architecture Topology",
+      level: "common",
+      phase: "Phase 1: Project Charter",
+      contentMarkdown: `## 3. Solution Landscape & Architecture Topology
+
+### 3.1 High-Level Solution Map
+\`\`\`mermaid
+flowchart TD
+    Users["Verified End Users / Residents"] --> Edge["Cloud Edge & WAF"]
+    Edge --> App["${title} Core Services (${recommendations.stack.backend})"]
+    App --> Cache["In-Memory Cache (${recommendations.stack.caching})"]
+    App --> DB[("Primary Database (${recommendations.stack.database})")]
+    App --> Bus["Message Broker (${recommendations.stack.messaging})"]
+    Bus --> Workers["Async Job Workers & Notifications"]
+\`\`\`
+
+### 3.2 Key Architecture Highlights
+- **Pattern:** ${recommendations.selectedPattern} pattern optimized for maintainability and modular decoupling.
+- **Compute:** Auto-scaling containerized workloads running on ${recommendations.stack.devops}.
+- **Persistence:** Multi-AZ ACID relational persistence with Point-in-Time Recovery.
+`,
+    },
+    {
+      id: "overview-governance",
+      title: "4. Governance, Stakeholders & Operating Model",
+      level: "common",
+      phase: "Phase 1: Project Charter",
+      contentMarkdown: `## 4. Governance, Stakeholders & Operating Model
+
+### 4.1 Architecture Decision Authority
+| Role | Accountable Owner | Key Decision Responsibilities |
+| :--- | :--- | :--- |
+| **Lead Solutions Architect** | Principal Architect | Pattern selection, technology stack, NFR enforcement |
+| **Security Officer** | SecOps Lead | Zero-trust compliance, encryption keys, vulnerability gates |
+| **Engineering Lead** | Tech Lead | Sprint delivery, code quality, automated test coverage |
+| **Product Manager** | Product Owner | Requirements prioritization, business acceptance |
+
+### 4.2 Review Gates & Sign-Off Cadence
+1. **Architecture Review Board (ARB):** Formal review at Milestone HLD completion.
+2. **Security & Threat Model Audit:** Pre-production pen-testing & STRIDE verification.
+3. **Operational Readiness Review (ORR):** Runbook drills and DR failover validation.
+`,
+    },
   ];
 }
 
@@ -913,7 +958,7 @@ export function generateBrdDocument(
 ): DocumentSection[] {
   const { metadata, requirements, recommendations } = projectData;
   const title = metadata?.title || "System Architecture";
-  const { domain, functionalRequirements } = requirements;
+  const { domain, functionalRequirements, nonFunctionalRequirements } = requirements;
 
   return [
     {
@@ -956,6 +1001,39 @@ flowchart TD
 ${functionalRequirements.map((f, idx) => `1. **Rule BR-${100 + idx + 1}:** ${f}`).join("\n")}
 `,
     },
+    {
+      id: "brd-detailed-reqs",
+      title: "3. Detailed Business Requirements & Acceptance Criteria",
+      level: "common",
+      phase: "Business Requirements",
+      contentMarkdown: `## 3. Detailed Business Requirements & Acceptance Criteria
+
+### 3.1 Business Capabilities
+| Capability ID | Capability Name | Description | Acceptance Criteria |
+| :--- | :--- | :--- | :--- |
+${functionalRequirements.map((f, idx) => `| **CAP-${idx + 1}** | ${f.slice(0, 28)} | Automated fulfillment of ${f.toLowerCase()} | System processes requests in under 200ms with full audit trace. |`).join("\n")}
+
+### 3.2 Business SLA Mandates
+- **Availability Target:** ${nonFunctionalRequirements.availability} uptime during standard operations.
+- **Latency Requirement:** ${nonFunctionalRequirements.latency} turnaround for interactive client workflows.
+`,
+    },
+    {
+      id: "brd-constraints",
+      title: "4. Business Constraints, Assumptions & Regulatory Mandates",
+      level: "common",
+      phase: "Business Requirements",
+      contentMarkdown: `## 4. Business Constraints, Assumptions & Regulatory Mandates
+
+### 4.1 Regulatory Compliance
+- Full compliance with: **${nonFunctionalRequirements.compliance.join(", ") || "Standard Enterprise Privacy Regulations"}**.
+- Complete data isolation and audit retention policies enforced.
+
+### 4.2 Documented Assumptions & Guardrails
+- End users have mobile or modern web browser connectivity.
+- Third-party webhook providers guarantee at least 99.9% uptime with idempotent delivery.
+`,
+    },
   ];
 }
 
@@ -968,13 +1046,34 @@ export function generateSrsDocument(
 
   return [
     {
-      id: "srs-functional",
-      title: "1. Functional Requirements & User Stories",
+      id: "srs-scope",
+      title: "1. System Scope & Product Perspective",
       level: "common",
       phase: "SRS",
-      contentMarkdown: `## 1. Functional Requirements & User Stories
+      contentMarkdown: `## 1. System Scope & Product Perspective
 
-### 1.1 Functional Specification Matrix
+### 1.1 Product Scope
+**${title}** is a carrier-grade software system engineered for **${requirements.domain}**.
+It serves as the authoritative transactional core, interfacing with client frontends, external payment processors, identity providers, and messaging gateways.
+
+### 1.2 System Context Diagram
+\`\`\`mermaid
+flowchart LR
+    Client["Client Web / Mobile"] --> Gateway["API Gateway / Reverse Proxy"]
+    Gateway --> Backend["${recommendations.stack.backend} Core Application"]
+    Backend --> DB[("Database: ${recommendations.stack.database}")]
+    Backend --> Ext["External Payment & SMS Gateways"]
+\`\`\`
+`,
+    },
+    {
+      id: "srs-functional",
+      title: "2. Functional Requirements & User Stories",
+      level: "common",
+      phase: "SRS",
+      contentMarkdown: `## 2. Functional Requirements & User Stories
+
+### 2.1 Functional Specification Matrix
 | Req ID | Requirement Title | User Story | Priority |
 | :--- | :--- | :--- | :--- |
 ${functionalRequirements
@@ -987,20 +1086,38 @@ ${functionalRequirements
     },
     {
       id: "srs-nfr",
-      title: "2. Non-Functional Quantitative SLAs",
+      title: "3. Non-Functional Quantitative SLAs",
       level: "common",
       phase: "SRS",
-      contentMarkdown: `## 2. Non-Functional Quantitative SLAs
+      contentMarkdown: `## 3. Non-Functional Quantitative SLAs
 
-### 2.1 Performance & Scalability
+### 3.1 Performance & Scalability
 - **Peak Concurrency:** **${targetScale.rps} RPS** sustained throughput.
 - **Latency SLA:** **${nonFunctionalRequirements.latency}** for 95th percentile requests.
 - **Service Availability:** **${nonFunctionalRequirements.availability}** uptime SLA (equating to < 4.38 hours downtime/year).
 
-### 2.2 Security & Compliance Mandates
+### 3.2 Security & Compliance Mandates
 - **Compliance Standards:** ${nonFunctionalRequirements.compliance.join(", ") || "ISO 27001, SOC2 Type II"}.
 - **Transport Security:** Strict TLS 1.3 encryption with HTTP Strict Transport Security (HSTS).
 - **Data at Rest:** Transparent Database Encryption using AES-256 keys managed by Cloud KMS.
+`,
+    },
+    {
+      id: "srs-interfaces",
+      title: "4. External Interfaces & Verification Matrix",
+      level: "common",
+      phase: "SRS",
+      contentMarkdown: `## 4. External Interfaces & Verification Matrix
+
+### 4.1 Interface Protocols
+- **Client Protocol:** HTTPS REST / JSON API with OAuth2 Bearer Tokens.
+- **Data Protocol:** TCP wire protocol with connection pooling.
+- **Telemetry Protocol:** OpenTelemetry gRPC metrics and OTLP tracing collector.
+
+### 4.2 Quality Assurance Verification Gates
+- **Unit Testing:** Minimum 85% branch coverage required for CI merge.
+- **Integration Testing:** Automated end-to-end regression test suite running in staging.
+- **Load Testing:** Automated k6 benchmark tests verifying ${targetScale.rps} RPS target.
 `,
     },
   ];
@@ -1009,7 +1126,7 @@ ${functionalRequirements
 export function generateSadDocument(
   projectData: Omit<DesignDocProject, "documentSections">
 ): DocumentSection[] {
-  const { metadata, recommendations } = projectData;
+  const { metadata, recommendations, requirements } = projectData;
   const title = metadata?.title || "System Architecture";
   const { selectedPattern, stack } = recommendations;
 
@@ -1055,6 +1172,33 @@ flowchart TD
 | **Caching Layer** | ${stack.caching} | Sub-millisecond latency for session validation and rate limit tracking. |
 | **Messaging Layer** | ${stack.messaging} | Guaranteed message delivery, decoupled asynchronous task processing. |
 | **Infrastructure / DevOps** | ${stack.devops} | Immutable container packaging and automated infrastructure-as-code deployments. |
+`,
+    },
+    {
+      id: "sad-decomposition",
+      title: "3. Component Decomposition & Bounded Contexts",
+      level: "hld",
+      phase: "Solution Architecture",
+      contentMarkdown: `## 3. Component Decomposition & Bounded Contexts
+
+### 3.1 Bounded Contexts
+1. **Identity & Access Management:** Manages member credentials, MFA challenges, and RBAC permissions.
+2. **Core Domain Processing:** Encapsulates business logic, state machines, and business invariant validations.
+3. **Notification Engine:** Dispatches real-time webhooks, push notifications, and emails via queues.
+4. **Audit & Compliance Ledger:** Append-only tamper-evident logging for regulatory review.
+`,
+    },
+    {
+      id: "sad-resilience",
+      title: "4. Cross-Cutting Concerns & Resilience Architecture",
+      level: "hld",
+      phase: "Solution Architecture",
+      contentMarkdown: `## 4. Cross-Cutting Concerns & Resilience Architecture
+
+### 4.1 Fault Tolerance Patterns
+- **Circuit Breakers:** Implemented on all third-party outbound HTTP requests (5 failures trip breaker for 30s).
+- **Dead Letter Queues (DLQ):** Poison messages redirected to DLQ with exponential retry headers.
+- **Idempotency Enforcement:** Redis-backed unique token deduplication prevents duplicate billing.
 `,
     },
   ];
@@ -1142,8 +1286,34 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_status ON transactions(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
 \`\`\`
+`,
+    },
+    {
+      id: "db-migrations",
+      title: "3. Database Migrations, Versioning & Seeding",
+      level: "lld",
+      phase: "Database Architecture",
+      contentMarkdown: `## 3. Database Migrations, Versioning & Seeding
 
-### 2.3 Backup & Point-in-Time Recovery (PITR) Policy
+### 3.1 Migration Strategy
+- Managed via automated database migration tools (e.g. Liquibase or Prisma Migrate).
+- Backward-compatible schema evolution (expand and contract pattern) with zero-downtime deployments.
+- Reversible rollback scripts verified on staging before production execution.
+`,
+    },
+    {
+      id: "db-backup-pitr",
+      title: "4. Backup, Replication & Point-in-Time Recovery",
+      level: "lld",
+      phase: "Database Architecture",
+      contentMarkdown: `## 4. Backup, Replication & Point-in-Time Recovery
+
+### 4.1 Replication Topology
+- **Primary Node:** Synchronous writes in Availability Zone 1.
+- **Standby Node:** Synchronous hot standby in Availability Zone 2 with automatic failover (< 30s).
+- **Read Replicas:** Up to 4 asynchronous read replicas for read-heavy query distribution.
+
+### 4.2 Backup & Retention
 - **Automated Snapshots:** Nightly full volume backups retained for 35 days.
 - **Write-Ahead Log (WAL) Archiving:** Continuous streaming WAL archiving to Cloud Storage, guaranteeing an RPO < 5 minutes.
 `,
@@ -1203,6 +1373,47 @@ export function generateApiDocument(
 | \`POST\` | \`/api/v1/checkout\` | Initiate checkout transaction | Yes | 30 req/min |
 `,
     },
+    {
+      id: "api-security-ratelimit",
+      title: "3. Authentication, Authorization & Rate Limiting",
+      level: "lld",
+      phase: "API Design",
+      contentMarkdown: `## 3. Authentication, Authorization & Rate Limiting
+
+### 3.1 Token Lifecycle
+- Access tokens expire after 15 minutes.
+- Refresh tokens stored in HTTP-only, SameSite=Strict cookies with automatic rotation on reuse.
+
+### 3.2 Rate Limiting Policies
+- Token bucket algorithm implemented via Redis.
+- Standard clients: 300 requests/minute.
+- Burst allowance: 50 requests over baseline.
+`,
+    },
+    {
+      id: "api-errors-webhooks",
+      title: "4. Error Handling, Problem Details & Webhooks",
+      level: "lld",
+      phase: "API Design",
+      contentMarkdown: `## 4. Error Handling, Problem Details & Webhooks
+
+### 4.1 RFC 7807 Problem Details Standard
+All API errors return RFC 7807 structured JSON payloads:
+\`\`\`json
+{
+  "type": "https://api.docs/errors/resource-not-found",
+  "title": "Resource Not Found",
+  "status": 404,
+  "detail": "Resource with specified UUID was not found.",
+  "instance": "/api/v1/resources/res_123"
+}
+\`\`\`
+
+### 4.2 Webhook Callbacks
+- Outbound webhooks signed with HMAC SHA-256 using shared secret.
+- Receiver validates header \`X-Signature-SHA256\` before processing.
+`,
+    },
   ];
 }
 
@@ -1245,6 +1456,37 @@ export function generateSecurityDocument(
 
 ### 2.2 Compliance Verification
 Adherence to **${nonFunctionalRequirements.compliance.join(", ") || "SOC2 Type II, ISO 27001"}**. Annual third-party penetration testing and quarterly vulnerability scans.
+`,
+    },
+    {
+      id: "sec-iam-rbac",
+      title: "3. Identity, Access Management & Zero Trust",
+      level: "common",
+      phase: "Security Architecture",
+      contentMarkdown: `## 3. Identity, Access Management & Zero Trust
+
+### 3.1 Role-Based Access Control (RBAC) Matrix
+| Role | Read Catalog | Create Listing / Order | Admin Verification | System Config |
+| :--- | :---: | :---: | :---: | :---: |
+| **Guest / Anonymous** | Yes | No | No | No |
+| **Verified Member** | Yes | Yes | No | No |
+| **Society Admin** | Yes | Yes | Yes | No |
+| **Super Administrator** | Yes | Yes | Yes | Yes |
+
+### 3.2 Least Privilege Architecture
+- Microservices use dedicated service accounts with IAM least privilege.
+- Production database access strictly restricted to application connection pools.
+`,
+    },
+    {
+      id: "sec-ops-audit",
+      title: "4. Security Operations & Audit Logging",
+      level: "common",
+      phase: "Security Architecture",
+      contentMarkdown: `## 4. Security Operations & Audit Logging
+
+### 4.1 Audit Trail Mandate
+All security events (authentication failures, permission modifications, financial mutations) emit immutable audit events to dedicated SIEM collectors.
 `,
     },
   ];
@@ -1304,6 +1546,37 @@ graph TD
 | **Database (${stack.database})** | 1 Writer, 1 Read Replica | 4 Read Replicas | Read IOPS or CPU > 75% |
 `,
     },
+    {
+      id: "deploy-cicd",
+      title: "3. CI/CD Deployment Pipeline & Rollout Automation",
+      level: "hld",
+      phase: "Deployment Architecture",
+      contentMarkdown: `## 3. CI/CD Deployment Pipeline & Rollout Automation
+
+### 3.1 Deployment Strategy: Canary Rollouts
+\`\`\`mermaid
+flowchart LR
+    Commit["Git Push to Main"] --> Lint["Static Lint & TypeScript Check"]
+    Lint --> Tests["Automated Test Suites (Unit & E2E)"]
+    Tests --> Build["Docker Container Image Build"]
+    Build --> Scan["Trivy Container Security Vulnerability Scan"]
+    Scan --> Canary["Deploy Canary (10% Traffic)"]
+    Canary --> Promote["Promote to 100% Production"]
+\`\`\`
+`,
+    },
+    {
+      id: "deploy-finops",
+      title: "4. Infrastructure Cost Governance & FinOps",
+      level: "hld",
+      phase: "Deployment Architecture",
+      contentMarkdown: `## 4. Infrastructure Cost Governance & FinOps
+
+### 4.1 Cost Budgeting & Optimization
+- Cloud resources tagged by environment (\`env: prod\`) and component (\`app: ${title.toLowerCase().replace(/[^a-z0-9]/g, "")}\`).
+- Compute auto-scaling scales down during off-peak night windows to maintain reasonable operational expenditure.
+`,
+    },
   ];
 }
 
@@ -1351,6 +1624,31 @@ export function generateRunbookDocument(
 3. Validate write availability with synthetic smoke test.
 `,
     },
+    {
+      id: "runbook-escalation",
+      title: "3. Incident Management & Escalation Tiers",
+      level: "common",
+      phase: "Operations & Runbooks",
+      contentMarkdown: `## 3. Incident Management & Escalation Tiers
+
+### 3.1 Severity Definitions
+- **Sev-1 (Critical Outage):** Production system offline, critical data loss risk. SLA: 15-minute response.
+- **Sev-2 (Degraded Performance):** High latency, partial feature unavailability. SLA: 30-minute response.
+- **Sev-3 (Minor Issue):** Cosmetic or non-blocking defect. SLA: Next business day.
+`,
+    },
+    {
+      id: "runbook-dr",
+      title: "4. Disaster Recovery & Regional Failover Playbook",
+      level: "common",
+      phase: "Operations & Runbooks",
+      contentMarkdown: `## 4. Disaster Recovery & Regional Failover Playbook
+
+### 4.1 DR Metrics
+- **Recovery Point Objective (RPO):** < 5 minutes via streaming WAL replication.
+- **Recovery Time Objective (RTO):** < 15 minutes for standby region activation.
+`,
+    },
   ];
 }
 
@@ -1382,6 +1680,43 @@ export function generateRaidDocument(
 
 ### 1.3 Project Constraints
 ${constraints.map((c, i) => `- **[Constraint ${i + 1}]** ${c}`).join("\n")}
+`,
+    },
+    {
+      id: "raid-assumptions",
+      title: "2. Architectural Assumptions & Validation Criteria",
+      level: "common",
+      phase: "RAID Governance",
+      contentMarkdown: `## 2. Architectural Assumptions & Validation Criteria
+
+### 2.1 Technical Assumptions
+1. Client applications support WebSocket or SSE for real-time notifications.
+2. Ingress CDN handles SSL/TLS termination and DDoS mitigation before traffic reaches backend VPC.
+`,
+    },
+    {
+      id: "raid-issues",
+      title: "3. Active Issues & Escalation Tracker",
+      level: "common",
+      phase: "RAID Governance",
+      contentMarkdown: `## 3. Active Issues & Escalation Tracker
+
+### 3.1 Issue Resolution Protocol
+All architecture blockers are logged in the project tracking backlog with an assigned owner, target release sprint, and impact analysis.
+`,
+    },
+    {
+      id: "raid-dependencies",
+      title: "4. External Dependencies & SLA Matrix",
+      level: "common",
+      phase: "RAID Governance",
+      contentMarkdown: `## 4. External Dependencies & SLA Matrix
+
+| Dependency | Vendor / Provider | Target SLA | Fallback Strategy |
+| :--- | :--- | :--- | :--- |
+| **Identity Provider** | Cloud Auth / OAuth2 | 99.99% | Cached public keys, graceful token validation |
+| **SMS Gateway** | Twilio / AWS SNS | 99.9% | Secondary SMS gateway fallback |
+| **Payment Gateway** | Stripe / Razorpay | 99.95% | Asynchronous webhook queuing with idempotency |
 `,
     },
   ];
@@ -1416,6 +1751,48 @@ flowchart LR
 - **Sprint 3 - 4:** Core business transactional endpoints with idempotency keys and unit/integration test suites.
 - **Sprint 5 - 6:** UI Client integration, Webhook handling, and Redis rate-limiting filters.
 - **Sprint 7 - 8:** Production multi-AZ infrastructure provisioning, disaster recovery drills, and security sign-off.
+`,
+    },
+    {
+      id: "roadmap-milestones",
+      title: "2. Architecture Milestones & Epics",
+      level: "common",
+      phase: "Roadmap",
+      contentMarkdown: `## 2. Architecture Milestones & Epics
+
+### 2.1 Major Epics
+- **EPIC-1: Core Domain Service Implementation:** End-to-end CRUD and state validation.
+- **EPIC-2: Data Pipeline & Analytics:** Asynchronous event publishing to warehouse.
+- **EPIC-3: Production Readiness & Hardening:** Chaos engineering and disaster recovery drills.
+`,
+    },
+    {
+      id: "roadmap-resources",
+      title: "3. Team & Resource Allocation",
+      level: "common",
+      phase: "Roadmap",
+      contentMarkdown: `## 3. Team & Resource Allocation
+
+| Role | Headcount | Primary Focus |
+| :--- | :--- | :--- |
+| **Principal Solutions Architect** | 1 | Architecture governance, ADR reviews |
+| **Senior Backend Engineers** | 2 | Core business logic, APIs, and DB performance |
+| **Frontend Engineer** | 1 | Client UX, state management, and real-time updates |
+| **DevOps / Cloud Engineer** | 1 | Multi-AZ cloud infrastructure, CI/CD, and monitoring |
+`,
+    },
+    {
+      id: "roadmap-critical-path",
+      title: "4. Critical Path & Contingency Buffers",
+      level: "common",
+      phase: "Roadmap",
+      contentMarkdown: `## 4. Critical Path & Contingency Buffers
+
+### 4.1 Critical Path Dependencies
+1. Schema approval and DDL execution.
+2. Authentication provider registration.
+3. Payment gateway regulatory verification.
+A two-week contingency buffer is reserved prior to general availability cutover.
 `,
     },
   ];
