@@ -103,3 +103,4 @@ sequenceDiagram
 ### Phase 6: Encoding Cleanup & Automated Verification
 - [ ] Fix all garbled characters / mojibake in UI source files.
 - [ ] Run test suite (`npm test`), verify TypeScript typing (`npx tsc --noEmit`), and execute production build (`npm run build`).
+

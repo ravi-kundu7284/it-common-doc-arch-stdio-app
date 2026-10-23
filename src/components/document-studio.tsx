@@ -14,6 +14,8 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   Download,
   Copy,
@@ -316,6 +318,39 @@ export const DocumentStudio: React.FC = () => {
       }
     });
   };
+
+  const currentSectionIndex = documentSections.findIndex((s) => s.id === activeSection?.id);
+  const hasPrevSection = currentSectionIndex > 0;
+  const hasNextSection = currentSectionIndex !== -1 && currentSectionIndex < documentSections.length - 1;
+
+  const handlePrevSection = () => {
+    if (hasPrevSection) {
+      const prevSection = documentSections[currentSectionIndex - 1];
+      handleSelectSection(prevSection.id);
+    }
+  };
+
+  const handleNextSection = () => {
+    if (hasNextSection) {
+      const nextSection = documentSections[currentSectionIndex + 1];
+      handleSelectSection(nextSection.id);
+    }
+  };
+
+  // Keyboard Navigation: Alt+ArrowLeft for Prev, Alt+ArrowRight for Next
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevSection();
+      } else if (e.altKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNextSection();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentSectionIndex, documentSections]);
 
   // Sync section filter when design level is changed from Navbar or other triggers
   useEffect(() => {
@@ -1217,6 +1252,33 @@ export const DocumentStudio: React.FC = () => {
                     <span>{activeSection.isLocked ? "Locked" : "Lock"}</span>
                   </button>
                 )}
+
+                {/* Prev / Next Quick Section Navigator */}
+                <div className="flex items-center gap-0.5 bg-slate-900 border border-slate-800 rounded-lg p-0.5 shrink-0 ml-1">
+                  <button
+                    type="button"
+                    onClick={handlePrevSection}
+                    disabled={!hasPrevSection}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition"
+                    title={hasPrevSection ? `Move to previous section (Alt+Left): "${documentSections[currentSectionIndex - 1]?.title}"` : "Already at first section"}
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Prev</span>
+                  </button>
+                  <span className="text-[10px] font-mono text-slate-400 px-1.5 border-x border-slate-800 shrink-0">
+                    {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1}/{documentSections.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleNextSection}
+                    disabled={!hasNextSection}
+                    className="flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-500 transition"
+                    title={hasNextSection ? `Move to next section (Alt+Right): "${documentSections[currentSectionIndex + 1]?.title}"` : "Already at last section"}
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Diagram Inserters */}
@@ -1274,6 +1336,39 @@ export const DocumentStudio: React.FC = () => {
                 className="w-full h-full p-4 rounded-xl bg-slate-900/70 border border-slate-800 text-slate-200 font-mono text-xs leading-relaxed focus:border-indigo-500 focus:outline-none resize-none selection:bg-indigo-600/40"
                 spellCheck={false}
               />
+            </div>
+
+            {/* Section Transition Bar (Prev / Next Section) */}
+            <div className="px-3.5 py-2 bg-slate-900/90 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handlePrevSection}
+                disabled={!hasPrevSection}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:hover:bg-slate-950 disabled:hover:text-slate-400 transition truncate max-w-[42%]"
+                title={hasPrevSection ? `Previous (Alt+Left): ${documentSections[currentSectionIndex - 1]?.title}` : "First section"}
+              >
+                <ChevronLeft className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="truncate">
+                  {hasPrevSection ? `Prev: ${documentSections[currentSectionIndex - 1]?.title}` : "First Section"}
+                </span>
+              </button>
+
+              <div className="text-[11px] text-slate-400 font-mono text-center shrink-0">
+                Section {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1} of {documentSections.length}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextSection}
+                disabled={!hasNextSection}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-25 disabled:hover:bg-slate-950 disabled:hover:text-slate-400 transition truncate max-w-[42%]"
+                title={hasNextSection ? `Next (Alt+Right): ${documentSections[currentSectionIndex + 1]?.title}` : "Last section"}
+              >
+                <span className="truncate">
+                  {hasNextSection ? `Next: ${documentSections[currentSectionIndex + 1]?.title}` : "Last Section"}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              </button>
             </div>
 
             {/* AI Error Alert Banner */}
@@ -1449,6 +1544,40 @@ export const DocumentStudio: React.FC = () => {
                   isActive={sec.id === activeSection?.id}
                 />
               ))}
+            </div>
+
+            {/* Document Bottom Navigation Bar (Prev / Next Section) */}
+            <div className="mt-12 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={handlePrevSection}
+                disabled={!hasPrevSection}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:bg-slate-950 transition font-medium"
+                title={hasPrevSection ? `Move to previous section: ${documentSections[currentSectionIndex - 1]?.title}` : "Already at start of document"}
+              >
+                <ChevronLeft className="w-4 h-4 text-indigo-400" />
+                <span className="truncate max-w-xs">
+                  {hasPrevSection ? `Prev: ${documentSections[currentSectionIndex - 1]?.title}` : "First Section"}
+                </span>
+              </button>
+
+              <div className="text-slate-400 font-mono text-[11px] text-center">
+                Viewing Section {currentSectionIndex !== -1 ? currentSectionIndex + 1 : 1} of {documentSections.length}
+                <span className="block text-[10px] text-slate-500 mt-0.5">Use Alt+Left / Alt+Right to navigate</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextSection}
+                disabled={!hasNextSection}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-30 transition shadow-md shadow-indigo-600/20"
+                title={hasNextSection ? `Move to next section: ${documentSections[currentSectionIndex + 1]?.title}` : "Already at end of document"}
+              >
+                <span className="truncate max-w-xs">
+                  {hasNextSection ? `Next: ${documentSections[currentSectionIndex + 1]?.title}` : "End of Document"}
+                </span>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </button>
             </div>
 
             {/* Document Footer */}
