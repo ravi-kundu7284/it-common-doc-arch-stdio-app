@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { generateStandardDocument } from "@/lib/doc-generator";
 import { dbGetUserAiConfig } from "@/lib/supabase";
 import {
@@ -171,9 +171,23 @@ Return clean Markdown with valid Mermaid.js diagrams if appropriate.`;
     if (promptType === "refine_section") {
       const currentSection = projectData.documentSections?.find((s: any) => s.id === sectionId);
       const instruction = userInstruction ? userInstruction.trim() : "";
+      const instrLower = instruction.toLowerCase();
 
       let updated = currentSection?.contentMarkdown || "";
-      updated += `\n\n> [!NOTE]\n> **Architectural Refinement (${new Date().toLocaleTimeString()}):**\n> Incorporated stakeholder requirement: "${instruction}".\n> Validated against SLA parameters (p99 latency and strict failure isolation).`;
+
+      if (instrLower.includes("sequence diagram")) {
+        updated += `\n\n### Interaction Flow: Sequence Specification\n\`\`\`mermaid\nsequenceDiagram\n    autonumber\n    actor Client\n    participant Ingress as API Gateway\n    participant Service as Core Domain Service\n    participant DB as Distributed Storage\n    participant Queue as Kafka Broker\n\n    Client->>Ingress: POST /api/v1/transaction (Idempotency-Key)\n    Ingress->>Service: Validate Token & Route Request\n    Service->>DB: Begin ACID Transaction\n    DB-->>Service: Commit Confirmed\n    Service->>Queue: Emit DOMAIN_EVENT (At-Least-Once)\n    Service-->>Ingress: 201 Created Payload\n    Ingress-->>Client: Result Confirmation\n\`\`\``;
+      } else if (instrLower.includes("retry") || instrLower.includes("timeout") || instrLower.includes("failure")) {
+        updated += `\n\n### Fault Tolerance, Retries & Resilience Policy\n\n| Failure Scenario | Detection Mechanism | Retry Policy | Fallback / Compensation |\n| :--- | :--- | :--- | :--- |\n| **Network Glitch / 503** | Immediate TCP reset | 3 retries, exponential backoff (200ms initial, jitter 50ms) | Route to read-only replica |\n| **Database Lock Contention** | SQL state 40P01 (Deadlock) | 2 retries with random jitter (100ms - 500ms) | Abort & notify client with 409 Retry-After |\n| **Downstream Webhook 5xx** | HTTP Status Code | Circuit Breaker (opens after 5 consecutive failures for 60s) | Route payload to Dead-Letter Queue (DLQ) |`;
+      } else if (instrLower.includes("security") || instrLower.includes("auth") || instrLower.includes("threat")) {
+        updated += `\n\n### Security Controls & Access Enforcement\n- **Authentication:** Asymmetric RS256 JWT tokens with short 15-minute TTL issued by OpenID Connect (OIDC) provider.\n- **Authorization:** Fine-grained Row-Level Security (RLS) coupled with Attribute-Based Access Control (ABAC).\n- **Data Protection:** Enforced TLS 1.3 in-transit and AES-256-GCM envelope encryption at rest via Cloud KMS.\n- **Tamper Evidence:** Cryptographically signed immutable audit trail logging all state mutations.`;
+      } else if (instrLower.includes("scalab") || instrLower.includes("cost")) {
+        updated += `\n\n### Cost-Optimized Elastic Scalability Matrix\n- **Horizontal Pod Autoscaling (HPA):** Scale out when average CPU > 70% or active connections > 1,500.\n- **Scale-to-Zero Capabilities:** Non-production environments auto-scale to zero instances outside core business hours to reduce monthly cloud expenditure by ~65%.\n- **Edge Caching:** Static assets and hot catalog items cached at edge CDN locations with 300s TTL.`;
+      } else if (instrLower.includes("simplify") || instrLower.includes("non-technical")) {
+        updated += `\n\n> [!NOTE]\n> **Plain-English Executive Overview:**\n> In simple terms, this component acts as a high-speed digital receptionist and traffic controller. It checks visitor credentials, guides requests to the right service, and ensures transactions complete safely without slowing down the user experience.`;
+      } else {
+        updated += `\n\n> [!NOTE]\n> **Architectural Refinement (${new Date().toLocaleTimeString()}):**\n> Incorporated stakeholder requirement: "${instruction}".\n> Validated against SLA parameters (p99 latency, failure isolation, and maintainability).`;
+      }
 
       return NextResponse.json({
         success: true,

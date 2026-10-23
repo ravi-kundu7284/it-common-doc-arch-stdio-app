@@ -11,9 +11,19 @@ import {
   TraceLink,
   AdrItem,
   ArchitectureAuditResult,
+  DocumentType,
+  DocumentLifecycleStatus,
+  DocumentItem,
+  AiRequirementAnalysis,
 } from "@/types";
 import { PRESET_TEMPLATES, ARCHITECTURE_PATTERNS } from "@/lib/templates";
-import { generateStandardDocument, syncTitleAcrossSections } from "@/lib/doc-generator";
+import {
+  generateStandardDocument,
+  syncTitleAcrossSections,
+  generateFullDocumentSet,
+  generateDocumentByType,
+  getDocumentTitle,
+} from "@/lib/doc-generator";
 import { DIAGRAM_CATALOG } from "@/lib/diagram-catalog";
 
 export type StudioTab =
@@ -82,6 +92,14 @@ interface DocState {
   // Architecture Quality Audit State
   latestAudit: ArchitectureAuditResult | null;
   setLatestAudit: (audit: ArchitectureAuditResult | null) => void;
+
+  // Multi-Document Workspace State
+  activeDocumentType: DocumentType | "all";
+  setActiveDocumentType: (type: DocumentType | "all") => void;
+  setDocumentLifecycleStatus: (docIdOrType: string, status: DocumentLifecycleStatus) => void;
+  addDocumentReviewComment: (docIdOrType: string, author: string, role: string, comment: string) => void;
+  applyAiAnalysisToProject: (analysis: AiRequirementAnalysis) => void;
+  generateCoordinatedDocumentSuite: (selectedTypes?: DocumentType[]) => void;
 
   // Actions
   toggleTheme: () => void;
@@ -189,8 +207,13 @@ export const createBlankProject = (
     },
   };
 
+  const initialDocs = generateFullDocumentSet(baseProject);
+  const activeDoc = initialDocs.find((d) => d.type === "hld") || initialDocs[0];
+
   return {
     ...baseProject,
+    documents: initialDocs,
+    activeDocumentId: activeDoc?.id,
     documentSections: generateStandardDocument(baseProject, level),
   };
 };
@@ -213,8 +236,13 @@ const createInitialProject = (): DesignDocProject => {
     recommendations: { ...initialTemplate.recommendations },
   };
 
+  const initialDocs = generateFullDocumentSet(baseProject);
+  const activeDoc = initialDocs.find((d) => d.type === "hld") || initialDocs[0];
+
   return {
     ...baseProject,
+    documents: initialDocs,
+    activeDocumentId: activeDoc?.id,
     documentSections: generateStandardDocument(baseProject, level),
   };
 };
@@ -404,6 +432,194 @@ export const useDocStore = create<DocState>()(
           modelName: "gemini-1.5-pro",
         },
         customTemplates: [],
+
+        // Multi-Document Workspace
+        activeDocumentType: "hld" as DocumentType | "all",
+        setActiveDocumentType: (type) => {
+          const { currentProject } = get();
+          if (type === "all") {
+            set({ activeDocumentType: "all" });
+            return;
+          }
+
+          const currentDocs = currentProject.documents ? [...currentProject.documents] : generateFullDocumentSet(currentProject);
+          const currentDocIdx = currentDocs.findIndex(
+            (d) => d.id === currentProject.activeDocumentId || d.type === get().activeDocumentType
+          );
+          if (currentDocIdx >= 0) {
+            currentDocs[currentDocIdx] = {
+              ...currentDocs[currentDocIdx],
+              sections: currentProject.documentSections,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+
+          const docType = type as DocumentType;
+          let targetDoc = currentDocs.find((d) => d.type === docType);
+          if (!targetDoc) {
+            const generatedSections = generateDocumentByType(docType, currentProject);
+            targetDoc = {
+              id: `doc_${docType}_${Math.random().toString(36).substring(2, 7)}`,
+              projectId: currentProject.id,
+              type: docType,
+              title: getDocumentTitle(docType),
+              status: "draft",
+              version: currentProject.metadata.version || "1.0.0",
+              sections: generatedSections,
+              reviewComments: [],
+              lastModifiedBy: "DocArch AI",
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            currentDocs.push(targetDoc);
+          }
+
+          set({
+            activeDocumentType: type,
+            currentProject: {
+              ...currentProject,
+              documents: currentDocs,
+              activeDocumentId: targetDoc.id,
+              documentSections: targetDoc.sections,
+            },
+            selectedSectionId: targetDoc.sections[0]?.id || null,
+            lastSavedAt: formatNow(),
+          });
+        },
+
+        setDocumentLifecycleStatus: (docIdOrType, status) => {
+          const { currentProject } = get();
+          const docs = currentProject.documents || generateFullDocumentSet(currentProject);
+          const updatedDocs = docs.map((d) => {
+            if (d.id === docIdOrType || d.type === docIdOrType) {
+              return { ...d, status, updatedAt: new Date().toISOString() };
+            }
+            return d;
+          });
+
+          const targetDoc = updatedDocs.find((d) => d.id === docIdOrType || d.type === docIdOrType);
+          const metaStatus = (status === "approved" ? "Approved" : status === "in_review" ? "In Review" : "Draft") as any;
+
+          set({
+            currentProject: {
+              ...currentProject,
+              documents: updatedDocs,
+              metadata: {
+                ...currentProject.metadata,
+                status: targetDoc ? metaStatus : currentProject.metadata.status,
+              },
+            },
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          });
+        },
+
+        addDocumentReviewComment: (docIdOrType, author, role, comment) => {
+          const { currentProject } = get();
+          const docs = currentProject.documents || generateFullDocumentSet(currentProject);
+          const newComment = {
+            id: `cmt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            author,
+            role,
+            comment,
+            createdAt: new Date().toISOString(),
+          };
+
+          const updatedDocs = docs.map((d) => {
+            if (d.id === docIdOrType || d.type === docIdOrType) {
+              return {
+                ...d,
+                reviewComments: [...(d.reviewComments || []), newComment],
+                updatedAt: new Date().toISOString(),
+              };
+            }
+            return d;
+          });
+
+          set({
+            currentProject: {
+              ...currentProject,
+              documents: updatedDocs,
+            },
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          });
+        },
+
+        applyAiAnalysisToProject: (analysis) => {
+          const { currentProject } = get();
+          const updatedReqs = {
+            domain: analysis.domain,
+            targetScale: {
+              rps: 1000,
+              users: "50,000 MAU",
+              dataRetention: "2 Years",
+            },
+            functionalRequirements: analysis.functionalRequirements.map((f) => `${f.title}: ${f.description}`),
+            nonFunctionalRequirements: {
+              latency: analysis.nonFunctionalRequirements.performance,
+              availability: analysis.nonFunctionalRequirements.availability,
+              compliance: analysis.nonFunctionalRequirements.compliance,
+            },
+            constraints: analysis.constraints,
+          };
+
+          const updatedRecs = {
+            selectedPattern: analysis.recommendedPattern,
+            patternAlternatives: [
+              {
+                pattern: "Distributed Microservices",
+                reasonNotChosen: "High orchestration overhead for current throughput requirements.",
+              },
+            ],
+            stack: analysis.recommendedStack,
+          };
+
+          const baseProject = {
+            ...currentProject,
+            metadata: {
+              ...currentProject.metadata,
+              title: analysis.projectName,
+              lastUpdated: new Date().toISOString().split("T")[0],
+            },
+            requirements: updatedReqs,
+            recommendations: updatedRecs,
+            aiAnalysis: analysis,
+          };
+
+          const generatedDocs = generateFullDocumentSet(baseProject, analysis.selectedDocumentTypes);
+          const hldDoc = generatedDocs.find((d) => d.type === "hld") || generatedDocs[0];
+
+          set({
+            currentProject: {
+              ...baseProject,
+              documents: generatedDocs,
+              activeDocumentId: hldDoc?.id,
+              documentSections: hldDoc?.sections || generateStandardDocument(baseProject, "hld"),
+            },
+            activeDocumentType: (hldDoc?.type as DocumentType) || "hld",
+            selectedSectionId: hldDoc?.sections[0]?.id || null,
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          });
+        },
+
+        generateCoordinatedDocumentSuite: (selectedTypes) => {
+          const { currentProject } = get();
+          const generatedDocs = generateFullDocumentSet(currentProject, selectedTypes);
+          const activeDoc = generatedDocs.find((d) => d.type === get().activeDocumentType) || generatedDocs[0];
+
+          set({
+            currentProject: {
+              ...currentProject,
+              documents: generatedDocs,
+              activeDocumentId: activeDoc?.id,
+              documentSections: activeDoc?.sections || currentProject.documentSections,
+            },
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          });
+        },
 
         // Diagrams
         diagrams: createInitialDiagrams(initProject.id),
@@ -757,26 +973,58 @@ export const useDocStore = create<DocState>()(
         })),
 
       updateSectionContent: (id, contentMarkdown) =>
-        set((state) => ({
-          currentProject: {
-            ...state.currentProject,
-            documentSections: state.currentProject.documentSections.map((sec) =>
-              sec.id === id ? { ...sec, contentMarkdown } : sec
-            ),
-          },
-          lastSavedAt: formatNow(),
-        })),
+        set((state) => {
+          const updatedSections = state.currentProject.documentSections.map((sec) =>
+            sec.id === id ? { ...sec, contentMarkdown, updatedAt: new Date().toISOString() } : sec
+          );
+          const currentDocs = state.currentProject.documents ? [...state.currentProject.documents] : [];
+          const activeDocIdx = currentDocs.findIndex(
+            (d) => d.id === state.currentProject.activeDocumentId || d.type === state.activeDocumentType
+          );
+          if (activeDocIdx >= 0) {
+            currentDocs[activeDocIdx] = {
+              ...currentDocs[activeDocIdx],
+              sections: updatedSections,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return {
+            currentProject: {
+              ...state.currentProject,
+              documentSections: updatedSections,
+              documents: currentDocs.length > 0 ? currentDocs : state.currentProject.documents,
+            },
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          };
+        }),
 
       updateSectionTitle: (id, title) =>
-        set((state) => ({
-          currentProject: {
-            ...state.currentProject,
-            documentSections: state.currentProject.documentSections.map((sec) =>
-              sec.id === id ? { ...sec, title } : sec
-            ),
-          },
-          lastSavedAt: formatNow(),
-        })),
+        set((state) => {
+          const updatedSections = state.currentProject.documentSections.map((sec) =>
+            sec.id === id ? { ...sec, title, updatedAt: new Date().toISOString() } : sec
+          );
+          const currentDocs = state.currentProject.documents ? [...state.currentProject.documents] : [];
+          const activeDocIdx = currentDocs.findIndex(
+            (d) => d.id === state.currentProject.activeDocumentId || d.type === state.activeDocumentType
+          );
+          if (activeDocIdx >= 0) {
+            currentDocs[activeDocIdx] = {
+              ...currentDocs[activeDocIdx],
+              sections: updatedSections,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return {
+            currentProject: {
+              ...state.currentProject,
+              documentSections: updatedSections,
+              documents: currentDocs.length > 0 ? currentDocs : state.currentProject.documents,
+            },
+            lastSavedAt: formatNow(),
+            syncStatus: "unsaved",
+          };
+        }),
 
       reorderSections: (newSections) =>
         set((state) => ({

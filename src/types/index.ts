@@ -2,6 +2,100 @@ import { z } from "zod";
 
 export type DesignLevel = "hld" | "lld" | "full";
 
+export type DocumentType =
+  | "overview"
+  | "brd"
+  | "srs"
+  | "hld"
+  | "lld"
+  | "sad"
+  | "adrs"
+  | "database"
+  | "api"
+  | "integration"
+  | "security"
+  | "deployment"
+  | "cicd"
+  | "testing"
+  | "runbook"
+  | "raid"
+  | "roadmap";
+
+export type DocumentLifecycleStatus =
+  | "draft"
+  | "in_review"
+  | "changes_requested"
+  | "approved"
+  | "published"
+  | "archived";
+
+export interface DocumentReviewComment {
+  id: string;
+  author: string;
+  role: string;
+  comment: string;
+  createdAt: string;
+}
+
+export interface DocumentItem {
+  id: string;
+  projectId: string;
+  type: DocumentType;
+  title: string;
+  description?: string;
+  status: DocumentLifecycleStatus;
+  version: string;
+  sections: DocumentSection[];
+  reviewComments: DocumentReviewComment[];
+  lastModifiedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiClarifyingQuestion {
+  id: string;
+  question: string;
+  answer?: string;
+  impact: string;
+}
+
+export interface AiRequirementAnalysis {
+  id: string;
+  userPrompt: string;
+  projectName: string;
+  domain: string;
+  problemStatement: string;
+  businessGoals: string[];
+  functionalRequirements: {
+    id: string;
+    title: string;
+    description: string;
+    priority: "critical" | "high" | "medium" | "low";
+  }[];
+  nonFunctionalRequirements: {
+    scalability: string;
+    availability: string;
+    security: string;
+    performance: string;
+    cost: string;
+    compliance: string[];
+  };
+  assumptions: string[];
+  constraints: string[];
+  dependencies: string[];
+  clarifyingQuestions: AiClarifyingQuestion[];
+  recommendedPattern: string;
+  recommendedStack: {
+    frontend: string;
+    backend: string;
+    database: string;
+    caching: string;
+    messaging: string;
+    devops: string;
+  };
+  selectedDocumentTypes: DocumentType[];
+}
+
 export interface DocumentSection {
   id: string;
   title: string;
@@ -277,11 +371,14 @@ export interface SavedProjectSummary {
 export interface DesignDocProject {
   id: string;
   designLevel?: DesignLevel;
+  activeDocumentId?: string;
+  documents?: DocumentItem[];
+  aiAnalysis?: AiRequirementAnalysis;
   metadata: {
     title: string;
     version: string;
     authors: string[];
-    status: "Draft" | "In Review" | "Approved";
+    status: "Draft" | "In Review" | "Changes Requested" | "Approved" | "Published" | "Archived";
     lastUpdated: string;
   };
   requirements: {

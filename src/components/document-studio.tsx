@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useDocStore } from "@/store/use-doc-store";
 import { MarkdownViewer } from "./markdown-viewer";
-import { DesignLevel } from "@/types";
+import { DesignLevel, DocumentType, DocumentLifecycleStatus } from "@/types";
 import {
   FileText,
   Eye,
@@ -21,6 +21,8 @@ import {
   ListOrdered,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   X,
   Layers,
   Cpu,
@@ -35,6 +37,12 @@ import {
   GitCompare,
   FileCode,
   CheckCheck,
+  Printer,
+  Tag,
+  MessageSquare,
+  FileStack,
+  CheckCircle2,
+  Search,
 } from "lucide-react";
 import {
   generateStandaloneHtml,
@@ -43,6 +51,7 @@ import {
   generateStructuredYaml,
   generateStructuredJson,
   downloadFile,
+  buildProjectDocumentationPackage,
 } from "@/lib/export-engine";
 import { ProjectsModal } from "./projects-modal";
 
@@ -159,6 +168,18 @@ const TEMPLATE_SUGGESTIONS = [
   },
 ];
 
+const QUICK_AI_PROMPTS = [
+  "Simplify this section for non-technical stakeholders",
+  "Improve scalability while keeping infrastructure costs low",
+  "Convert this monolithic design into a modular monolith",
+  "Add authentication and authorization details",
+  "Update the deployment architecture for Google Cloud Run",
+  "Add failure handling, retry policies, and timeouts",
+  "Generate a sequence diagram for the order creation workflow",
+  "Compare PostgreSQL and MongoDB for this use case",
+  "Review this document for missing security controls",
+];
+
 interface SectionPreviewCardProps {
   section: {
     id: string;
@@ -214,6 +235,10 @@ export const DocumentStudio: React.FC = () => {
     saveCurrentProjectToDrafts,
     toggleSectionLock,
     setProject,
+    activeDocumentType,
+    setActiveDocumentType,
+    setDocumentLifecycleStatus,
+    addDocumentReviewComment,
   } = useDocStore();
 
   const { metadata, requirements, recommendations, documentSections, designLevel = "hld" } = currentProject;
@@ -225,6 +250,14 @@ export const DocumentStudio: React.FC = () => {
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [rightPanelTab, setRightPanelTab] = useState<"ai" | "lifecycle" | "stats">("ai");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Review Comment State
+  const [commentAuthor, setCommentAuthor] = useState("Enterprise Architect");
+  const [commentRole, setCommentRole] = useState("Reviewer");
+  const [commentText, setCommentText] = useState("");
 
   // Diff Modal State (Review AI changes before applying)
   const [diffModal, setDiffModal] = useState<{
@@ -466,6 +499,22 @@ export const DocumentStudio: React.FC = () => {
     downloadFile(filename, html, "text/html");
   };
 
+  const handleExportProjectPackage = () => {
+    const files = buildProjectDocumentationPackage(currentProject);
+    const manifestContent = files
+      .map((f) => `=== FILE: ${f.filename} ===\n\n${f.content}\n\n`)
+      .join("\n" + "=".repeat(60) + "\n\n");
+    downloadFile(
+      `${metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "_")}_project_documentation_package.txt`,
+      manifestContent,
+      "text/plain"
+    );
+  };
+
+  const handlePrintDocument = () => {
+    window.print();
+  };
+
   const handleCopyMarkdown = () => {
     const md = generateRawMarkdown(currentProject);
     navigator.clipboard.writeText(md);
@@ -479,8 +528,14 @@ export const DocumentStudio: React.FC = () => {
     downloadFile(filename, md, "text/markdown");
   };
 
-  // Filtered sections for sidebar navigation
+  // Filtered sections for sidebar navigation with search
   const filteredSections = documentSections.filter((sec) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const match =
+        sec.title.toLowerCase().includes(q) || sec.contentMarkdown.toLowerCase().includes(q);
+      if (!match) return false;
+    }
     if (sectionFilter === "all") return true;
     if (sectionFilter === "hld") return sec.level === "hld" || sec.level === "common" || !sec.level;
     if (sectionFilter === "lld") return sec.level === "lld" || sec.level === "common";
@@ -489,6 +544,16 @@ export const DocumentStudio: React.FC = () => {
 
   const hldCount = documentSections.filter((s) => s.level === "hld").length;
   const lldCount = documentSections.filter((s) => s.level === "lld").length;
+
+  // Stats calculation
+  const fullDocumentMarkdown = documentSections.map((s) => s.contentMarkdown).join("\n\n");
+  const wordCount = fullDocumentMarkdown.split(/\s+/).filter(Boolean).length;
+  const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 200));
+
+  const currentDocItem = (currentProject.documents || []).find(
+    (d) => d.id === currentProject.activeDocumentId || d.type === activeDocumentType
+  );
+  const currentStatus: DocumentLifecycleStatus = currentDocItem?.status || "draft";
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-950 text-slate-100 overflow-hidden">
@@ -504,6 +569,42 @@ export const DocumentStudio: React.FC = () => {
             <span className="hidden sm:inline">Sections ({documentSections.length})</span>
           </button>
 
+          {/* Document Suite Switcher */}
+          {currentProject.documents && currentProject.documents.length > 0 && (
+            <div className="flex items-center gap-1.5 pl-2 border-l border-slate-800">
+              <FileStack className="w-3.5 h-3.5 text-indigo-400" />
+              <select
+                value={activeDocumentType || "hld"}
+                onChange={(e) => setActiveDocumentType(e.target.value as any)}
+                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 text-xs font-semibold focus:outline-none focus:border-indigo-500 max-w-[160px] sm:max-w-[220px] truncate"
+                title="Switch active document in project suite"
+              >
+                {currentProject.documents.map((d) => (
+                  <option key={d.id} value={d.type}>
+                    {d.title} ({d.status.toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Document Lifecycle Badge */}
+          <div className="hidden sm:flex items-center">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                currentStatus === "approved" || currentStatus === "published"
+                  ? "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
+                  : currentStatus === "in_review"
+                  ? "bg-blue-950/80 border-blue-700/60 text-blue-300"
+                  : currentStatus === "changes_requested"
+                  ? "bg-rose-950/80 border-rose-700/60 text-rose-300"
+                  : "bg-amber-950/80 border-amber-700/60 text-amber-300"
+              }`}
+            >
+              {currentStatus.replace("_", " ")}
+            </span>
+          </div>
+
           {/* Project Title Input (dynamic live sync) */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 font-semibold hidden md:inline">Document:</span>
@@ -512,12 +613,12 @@ export const DocumentStudio: React.FC = () => {
               value={metadata.title}
               onChange={(e) => updateMetadata({ title: e.target.value })}
               title="Click to edit document title (automatically synchronizes across all sections)"
-              className="bg-transparent border-b border-dashed border-slate-700 hover:border-slate-500 focus:border-indigo-500 px-1 py-0.5 font-bold text-slate-200 text-xs w-28 sm:w-52 md:w-72 truncate focus:outline-none"
+              className="bg-transparent border-b border-dashed border-slate-700 hover:border-slate-500 focus:border-indigo-500 px-1 py-0.5 font-bold text-slate-200 text-xs w-24 sm:w-44 md:w-56 truncate focus:outline-none"
             />
           </div>
 
           {/* HLD vs LLD Selection Mode Switcher */}
-          <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800">
+          <div className="hidden md:flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800">
             <button
               onClick={() => {
                 setDesignLevel("hld");
@@ -745,9 +846,54 @@ export const DocumentStudio: React.FC = () => {
                     <div className="text-[10px] text-slate-400">Machine-readable data spec</div>
                   </div>
                 </button>
+                <div className="border-t border-slate-800 my-1"></div>
+                <button
+                  onClick={handlePrintDocument}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  <div>
+                    <div className="font-semibold">Print / Save as PDF</div>
+                    <div className="text-[10px] text-slate-400">High-res vector print dialog</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportProjectPackage}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <FolderKanban className="w-4 h-4 text-cyan-400" />
+                  <div>
+                    <div className="font-semibold">Full Project Package (.zip bundle)</div>
+                    <div className="text-[10px] text-slate-400">All docs, README manifest & models</div>
+                  </div>
+                </button>
               </div>
             )}
           </div>
+
+          {/* Print button */}
+          <button
+            onClick={handlePrintDocument}
+            className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs transition"
+            title="Print or Save as PDF (Ctrl+P)"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Print</span>
+          </button>
+
+          {/* Toggle Right Inspector (AI Assistant & Lifecycle) */}
+          <button
+            onClick={() => setShowRightPanel(!showRightPanel)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition ${
+              showRightPanel
+                ? "bg-indigo-600/20 border-indigo-500/40 text-indigo-300"
+                : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+            }`}
+            title={showRightPanel ? "Hide AI Assistant & Review Inspector" : "Show AI Assistant & Review Inspector"}
+          >
+            {showRightPanel ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+            <span className="hidden xl:inline">AI & Review</span>
+          </button>
         </div>
       </div>
 
@@ -764,7 +910,7 @@ export const DocumentStudio: React.FC = () => {
         {/* SIDEBAR: Sections List (Collapsible on Desktop, Off-canvas Drawer on Mobile) */}
         {showSectionList && (
           <aside className="fixed inset-y-16 left-0 z-30 w-72 sm:w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 shadow-2xl md:relative md:inset-y-0 md:z-auto md:shadow-none md:bg-slate-900/70">
-            {/* Sidebar Top: Section Filter and Add Button */}
+            {/* Sidebar Top: Section Filter, Search and Add Button */}
             <div className="p-2.5 border-b border-slate-800 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold uppercase tracking-wider text-slate-400 text-[11px]">
@@ -787,6 +933,18 @@ export const DocumentStudio: React.FC = () => {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Filter sections..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               {/* Filter Tabs */}
@@ -1251,6 +1409,270 @@ export const DocumentStudio: React.FC = () => {
               <p>Generated with <strong>DocArch AI Studio</strong> &bull; {designLevel.toUpperCase()} Technical Design</p>
             </footer>
           </div>
+        )}
+
+        {/* PANEL 3: Collapsible Right Panel (Contextual AI Assistant & Governance Inspector) */}
+        {showRightPanel && (
+          <aside className="fixed inset-y-16 right-0 z-30 w-80 lg:w-96 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 shadow-2xl md:relative md:inset-y-0 md:z-auto md:shadow-none md:bg-slate-900/80">
+            {/* Header Tabs */}
+            <div className="p-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab("ai")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                    rightPanelTab === "ai"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>AI Assistant</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab("lifecycle")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                    rightPanelTab === "lifecycle"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Lifecycle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab("stats")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 ${
+                    rightPanelTab === "stats"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Stats</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRightPanel(false)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                title="Collapse Right Inspector"
+              >
+                <PanelRightClose className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* TAB 1: AI Assistant */}
+            {rightPanelTab === "ai" && (
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                    Target Section:
+                  </span>
+                  <div className="font-bold text-slate-200 mt-0.5 truncate" title={activeSection?.title}>
+                    {activeSection?.title || "No section selected"}
+                  </div>
+                </div>
+
+                {/* Quick Action Prompt Chips */}
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                    Quick AI Architectural Refinements:
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {QUICK_AI_PROMPTS.map((promptText, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setAiInstruction(promptText);
+                        }}
+                        className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-950/20 text-slate-300 hover:text-indigo-200 text-left text-[11px] transition leading-tight flex items-start gap-1.5"
+                      >
+                        <Sparkles className="w-3 h-3 text-indigo-400 mt-0.5 shrink-0" />
+                        <span>{promptText}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Instruction Box */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <label className="block text-[11px] font-semibold text-slate-300">
+                    Custom AI Instruction:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={aiInstruction}
+                    onChange={(e) => setAiInstruction(e.target.value)}
+                    placeholder="e.g. Add multi-AZ failover diagram, or add PCI-DSS tokenization table..."
+                    className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-indigo-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAiRefine}
+                    disabled={isAiRefining || !aiInstruction.trim()}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs transition shadow-md shadow-indigo-600/30"
+                  >
+                    {isAiRefining ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Refining Architecture...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Refine Section with AI (Review Diff)</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: Document Governance & Lifecycle */}
+            {rightPanelTab === "lifecycle" && (
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs">
+                {/* Status Selector */}
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                    Document Lifecycle State
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={currentStatus}
+                      onChange={(e) =>
+                        setDocumentLifecycleStatus(
+                          currentDocItem?.id || activeDocumentType || "hld",
+                          e.target.value as any
+                        )
+                      }
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 font-bold focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="draft">Draft (Work in Progress)</option>
+                      <option value="in_review">In Review (Architecture Board)</option>
+                      <option value="changes_requested">Changes Requested</option>
+                      <option value="approved">Approved (CAB Signed-Off)</option>
+                      <option value="published">Published (Production Baseline)</option>
+                      <option value="archived">Archived (Superseded)</option>
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Governs whether this specification is a preliminary draft or signed-off architecture standard.
+                  </p>
+                </div>
+
+                {/* Add Review Comment */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-300 block">
+                    Add Architecture Review Note:
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Your Name / Role"
+                      value={commentAuthor}
+                      onChange={(e) => setCommentAuthor(e.target.value)}
+                      className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                    />
+                    <select
+                      value={commentRole}
+                      onChange={(e) => setCommentRole(e.target.value)}
+                      className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                    >
+                      <option value="Lead Architect">Lead Architect</option>
+                      <option value="Security Officer">Security Officer</option>
+                      <option value="DevOps / SRE Lead">DevOps / SRE Lead</option>
+                      <option value="Product Manager">Product Manager</option>
+                    </select>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="e.g. Approved with condition that RTO is tested before cutover..."
+                    className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!commentText.trim()) return;
+                      addDocumentReviewComment(
+                        currentDocItem?.id || activeDocumentType || "hld",
+                        commentAuthor,
+                        commentRole,
+                        commentText.trim()
+                      );
+                      setCommentText("");
+                    }}
+                    className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition"
+                  >
+                    Post Review Comment
+                  </button>
+                </div>
+
+                {/* Comments List */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <span className="text-[11px] font-semibold text-slate-400 block">
+                    Review History ({currentDocItem?.reviewComments?.length || 0})
+                  </span>
+                  {(currentDocItem?.reviewComments || []).map((cmt) => (
+                    <div key={cmt.id} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 text-[11px]">
+                      <div className="flex items-center justify-between text-slate-400">
+                        <span className="font-bold text-slate-200">{cmt.author} ({cmt.role})</span>
+                        <span className="text-[10px] text-slate-500">
+                          {new Date(cmt.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-300 mt-1 leading-relaxed">{cmt.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: Document Stats & Inspector */}
+            {rightPanelTab === "stats" && (
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                    Document Metrics
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-slate-300">
+                    <div className="p-2 rounded bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block">Words</span>
+                      <span className="text-base font-bold text-white">{wordCount.toLocaleString()}</span>
+                    </div>
+                    <div className="p-2 rounded bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block">Read Time</span>
+                      <span className="text-base font-bold text-white">~{readingTimeMinutes} min</span>
+                    </div>
+                    <div className="p-2 rounded bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block">Sections</span>
+                      <span className="text-base font-bold text-white">{documentSections.length}</span>
+                    </div>
+                    <div className="p-2 rounded bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block">Locked Sections</span>
+                      <span className="text-base font-bold text-amber-400">
+                        {documentSections.filter((s) => s.isLocked).length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-slate-400 text-[11px]">
+                  <p><strong>Project:</strong> {metadata.title}</p>
+                  <p><strong>Domain:</strong> {requirements.domain}</p>
+                  <p><strong>Pattern:</strong> {recommendations.selectedPattern}</p>
+                  <p><strong>Version:</strong> v{metadata.version}</p>
+                  <p><strong>Last Updated:</strong> {metadata.lastUpdated}</p>
+                </div>
+              </div>
+            )}
+          </aside>
         )}
       </div>
 
