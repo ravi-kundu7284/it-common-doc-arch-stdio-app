@@ -17,7 +17,7 @@ import {
 } from "@/lib/openai-service";
 import { parseOpenAiError, resolveServerOpenAiKey } from "@/lib/openai";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
   try {

@@ -273,3 +273,4 @@ export const StepNavigationBar: React.FC = () => {
     </aside>
   );
 };
+
