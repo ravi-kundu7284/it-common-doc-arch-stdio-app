@@ -427,9 +427,9 @@ export const useDocStore = create<DocState>()(
         theme: "dark",
         syncStatus: "saved",
         apiSettings: {
-          provider: "builtin",
+          provider: "openai",
           apiKey: "",
-          modelName: "gemini-1.5-pro",
+          modelName: "gpt-4o",
         },
         customTemplates: [],
 
