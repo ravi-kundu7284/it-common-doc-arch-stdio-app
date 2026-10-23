@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { dbFindUserByResetToken, dbResetUserPassword, dbRecordAuditLog } from "@/lib/supabase";
 import { hashPassword } from "@/lib/crypto";
 import { getClientIp } from "@/lib/rate-limit";

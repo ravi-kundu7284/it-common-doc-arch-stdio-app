@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "prebuild": "node scripts/prepare-build.mjs",
+    "build": "node -r ./scripts/patch-fs.cjs ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node scripts/run-tests.mjs",
     "pages:build": "npx @cloudflare/next-on-pages@1",
     "db:test": "node scripts/test-db-connection.mjs",
     "docker:up": "docker-compose up -d",

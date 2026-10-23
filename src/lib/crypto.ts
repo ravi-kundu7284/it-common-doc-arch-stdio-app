@@ -1,4 +1,4 @@
-import { getEnvVar } from "./env";
+﻿import { getEnvVar } from "./env";
 
 // Universal Web Crypto API - 100% compatible with Edge Runtime, Node.js, and Cloudflare Pages
 const getEncryptionSecret = (): string => {

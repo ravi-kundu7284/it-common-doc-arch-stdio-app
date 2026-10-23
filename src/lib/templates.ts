@@ -1,4 +1,4 @@
-import { DesignDocProject, PresetTemplate, ArchitecturePatternInfo } from "@/types";
+﻿import { DesignDocProject, PresetTemplate, ArchitecturePatternInfo } from "@/types";
 
 export const ARCHITECTURE_PATTERNS: ArchitecturePatternInfo[] = [
   {

@@ -23,6 +23,7 @@ import {
   Globe,
   DollarSign,
   Users,
+  Cpu,
 } from "lucide-react";
 
 const COMPLIANCE_OPTIONS = [
@@ -194,64 +195,74 @@ export const RequirementsWizard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 pb-24 md:pb-8">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 pb-24 md:pb-8">
       {/* Hero Banner & Presets Bar */}
       <div className="mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
-          <div>
-            <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Module A &bull; Guided Requirements Intake</span>
+        <div className="pb-6 border-b border-slate-800 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Module A &bull; Guided Requirements Intake</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                Design Requirements Intake Wizard
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Standardize your system design parameters to eliminate ambiguity before architectural synthesis.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Design Requirements Intake Wizard
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Standardize your system design parameters to eliminate ambiguity before architectural synthesis.
-            </p>
-          </div>
 
-          {/* Quick preset selector & Start Blank button */}
-          <div className="flex flex-wrap items-center gap-1.5 self-start md:self-center">
             <button
               type="button"
               onClick={handleStartBlank}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600/30 border border-indigo-500/50 hover:bg-indigo-600 hover:text-white text-indigo-300 transition shadow"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white text-indigo-300 transition shadow shrink-0 self-start sm:self-center"
               title="Start with a blank project without any demo data"
             >
-              + Blank Architecture (No Demo Data)
+              <Plus className="w-3.5 h-3.5" />
+              <span>Blank Architecture</span>
             </button>
-            <span className="text-[11px] text-slate-400 mx-1 font-medium hidden sm:inline">Presets:</span>
-            {PRESET_TEMPLATES.map((tpl) => (
-              <button
-                key={tpl.id}
-                type="button"
-                onClick={() => {
-                  loadPresetTemplate(tpl.id, selectedLevel);
-                  setValue("title", tpl.title);
-                  setValue("domain", tpl.requirements.domain);
-                  setValue("rps", tpl.requirements.targetScale.rps);
-                  setValue("users", tpl.requirements.targetScale.users);
-                  setValue("dataRetention", tpl.requirements.targetScale.dataRetention);
-                  setValue("latency", tpl.requirements.nonFunctionalRequirements.latency);
-                  setValue("availability", tpl.requirements.nonFunctionalRequirements.availability);
-                  setSelectedCompliance(tpl.requirements.nonFunctionalRequirements.compliance);
-                  setValue("compliance", tpl.requirements.nonFunctionalRequirements.compliance);
-                  setFunctionalList(tpl.requirements.functionalRequirements);
-                  setValue("functionalRequirements", tpl.requirements.functionalRequirements.join("\n"));
-                  setValue("constraints", tpl.requirements.constraints.join("\n"));
-                }}
-                className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-900 border border-slate-800 hover:border-indigo-500/60 hover:text-indigo-300 text-slate-300 transition"
-              >
-                {tpl.domain}
-              </button>
-            ))}
+          </div>
+
+          {/* Quick preset selector pills */}
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
+            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 shrink-0">
+              <Sparkles className="w-3 h-3 text-indigo-400" />
+              <span>Industry Presets:</span>
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {PRESET_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    loadPresetTemplate(tpl.id, selectedLevel);
+                    setValue("title", tpl.title);
+                    setValue("domain", tpl.requirements.domain);
+                    setValue("rps", tpl.requirements.targetScale.rps);
+                    setValue("users", tpl.requirements.targetScale.users);
+                    setValue("dataRetention", tpl.requirements.targetScale.dataRetention);
+                    setValue("latency", tpl.requirements.nonFunctionalRequirements.latency);
+                    setValue("availability", tpl.requirements.nonFunctionalRequirements.availability);
+                    setSelectedCompliance(tpl.requirements.nonFunctionalRequirements.compliance);
+                    setValue("compliance", tpl.requirements.nonFunctionalRequirements.compliance);
+                    setFunctionalList(tpl.requirements.functionalRequirements);
+                    setValue("functionalRequirements", tpl.requirements.functionalRequirements.join("\n"));
+                    setValue("constraints", tpl.requirements.constraints.join("\n"));
+                  }}
+                  className="px-3 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-800 hover:border-indigo-500/60 hover:text-indigo-200 text-slate-300 transition flex items-center gap-1.5"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  <span>{tpl.domain}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* DESIGN LEVEL SELECTION (HLD vs LLD vs Full) */}
-        <div className="mt-6 p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-          <div className="flex items-center justify-between mb-3">
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-4">
             <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-indigo-400" />
               <span>Select Architecture Design Level</span>
@@ -259,26 +270,33 @@ export const RequirementsWizard: React.FC = () => {
             <span className="text-[11px] text-slate-400">Content and sections adapt to this selection</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             <button
               type="button"
               onClick={() => {
                 setSelectedLevel("hld");
                 setDesignLevel("hld");
               }}
-              className={`p-3.5 rounded-xl border text-left transition ${
+              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
                 selectedLevel === "hld"
-                  ? "border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/50"
+                  ? "border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/50 shadow-lg shadow-emerald-950/30"
                   : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs text-emerald-300">🏛️ High-Level Design (HLD)</span>
-                {selectedLevel === "hld" && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-emerald-950 border border-emerald-800 text-emerald-400">
+                      <Layers className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-emerald-300">High-Level Design (HLD)</span>
+                  </div>
+                  {selectedLevel === "hld" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  System Context, C4 Containers, Microservices, Multi-Region Topology, Security & DR SLAs.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                System Context, C4 Containers, Microservices, Multi-Region Topology, Security & DR SLAs.
-              </p>
             </button>
 
             <button
@@ -287,19 +305,26 @@ export const RequirementsWizard: React.FC = () => {
                 setSelectedLevel("lld");
                 setDesignLevel("lld");
               }}
-              className={`p-3.5 rounded-xl border text-left transition ${
+              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
                 selectedLevel === "lld"
-                  ? "border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500/50"
+                  ? "border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-950/30"
                   : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs text-indigo-300">⚙️ Low-Level Design (LLD)</span>
-                {selectedLevel === "lld" && <CheckCircle2 className="w-4 h-4 text-indigo-400" />}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-indigo-950 border border-indigo-800 text-indigo-400">
+                      <Cpu className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-indigo-300">Low-Level Design (LLD)</span>
+                  </div>
+                  {selectedLevel === "lld" && <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Class Models, Detailed DDL Schemas, API Payload Contracts, Sequence Workflows, Algorithms & Retries.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Class Models, Detailed DDL Schemas, API Payload Contracts, Sequence Workflows, Algorithms & Retries.
-              </p>
             </button>
 
             <button
@@ -308,19 +333,26 @@ export const RequirementsWizard: React.FC = () => {
                 setSelectedLevel("full");
                 setDesignLevel("full");
               }}
-              className={`p-3.5 rounded-xl border text-left transition ${
+              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
                 selectedLevel === "full"
-                  ? "border-cyan-500 bg-cyan-950/40 ring-1 ring-cyan-500/50"
+                  ? "border-cyan-500 bg-cyan-950/40 ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-950/30"
                   : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-xs text-cyan-300">📑 Full Architecture (HLD + LLD)</span>
-                {selectedLevel === "full" && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-cyan-950 border border-cyan-800 text-cyan-400">
+                      <FileText className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-bold text-xs text-cyan-300">Full Architecture (HLD + LLD)</span>
+                  </div>
+                  {selectedLevel === "full" && <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />}
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Comprehensive end-to-end design specification incorporating both macro topology and deep code mechanics.
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Comprehensive end-to-end design specification incorporating both macro topology and deep code mechanics.
-              </p>
             </button>
           </div>
         </div>

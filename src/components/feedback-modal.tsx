@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from "react";
 import { useSupportStore } from "@/store/use-support-store";
@@ -181,12 +181,12 @@ export const FeedbackModal: React.FC = () => {
                       onChange={(e) => setCategory(e.target.value as FeedbackCategory)}
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-indigo-500 focus:outline-none"
                     >
-                      <option value="overall">🌐 Overall Product Experience</option>
-                      <option value="ai_quality">🧠 AI Architecture & Synthesis Quality</option>
-                      <option value="diagrams">📊 Mermaid Diagram & Visualizer Usability</option>
-                      <option value="export">💾 HTML / Markdown Export & Printing</option>
-                      <option value="templates">📁 Architecture Presets & Templates</option>
-                      <option value="other">💡 Other Suggestions & Feature Requests</option>
+                      <option value="overall">ðŸŒ Overall Product Experience</option>
+                      <option value="ai_quality">ðŸ§  AI Architecture & Synthesis Quality</option>
+                      <option value="diagrams">ðŸ“Š Mermaid Diagram & Visualizer Usability</option>
+                      <option value="export">ðŸ’¾ HTML / Markdown Export & Printing</option>
+                      <option value="templates">ðŸ“ Architecture Presets & Templates</option>
+                      <option value="other">ðŸ’¡ Other Suggestions & Feature Requests</option>
                     </select>
                   </div>
 
