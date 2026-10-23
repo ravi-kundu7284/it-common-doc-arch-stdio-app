@@ -28,10 +28,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Liquibase
-        uses: liquibase-github-actions/setup-liquibase@v1
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          liquibaseVersion: '4.27.0'
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Liquibase
+        uses: liquibase/setup-liquibase@v3
+        with:
+          version: '4.32.0'
+          edition: 'community'
+
+      - name: Install PostgreSQL Driver
+        run: |
+          liquibase lpm add postgresql --global --skip-existing
 
       - name: Run Liquibase in Dev Schema
         run: |
