@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { dbCheckHealth, getSupabaseClient, dbEnsureSeedUsers } from "@/lib/supabase";
 
 export const runtime = "edge";

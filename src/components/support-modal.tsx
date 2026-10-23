@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from "react";
 import { useSupportStore } from "@/store/use-support-store";
@@ -295,12 +295,12 @@ export const SupportModal: React.FC = () => {
                     onChange={(e) => setCategory(e.target.value as TicketCategory)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:border-indigo-500 focus:outline-none"
                   >
-                    <option value="bug">🐛 Bug Report</option>
-                    <option value="feature">✨ Feature Request</option>
-                    <option value="architecture">🏛️ Architecture Consultation</option>
-                    <option value="performance">⚡ Performance Issue</option>
-                    <option value="account">🔐 Account & Authentication</option>
-                    <option value="other">💬 General Question</option>
+                    <option value="bug">ðŸ› Bug Report</option>
+                    <option value="feature">âœ¨ Feature Request</option>
+                    <option value="architecture">ðŸ›ï¸ Architecture Consultation</option>
+                    <option value="performance">âš¡ Performance Issue</option>
+                    <option value="account">ðŸ” Account & Authentication</option>
+                    <option value="other">ðŸ’¬ General Question</option>
                   </select>
                 </div>
 
@@ -522,7 +522,7 @@ export const SupportModal: React.FC = () => {
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className={`font-bold ${c.isStaff ? "text-indigo-400" : "text-slate-300"}`}>
-                          {c.author} {c.isStaff && "🛡️ (Support)"}
+                          {c.author} {c.isStaff && "ðŸ›¡ï¸ (Support)"}
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono">{c.timestamp}</span>
                       </div>

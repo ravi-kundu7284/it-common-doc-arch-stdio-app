@@ -660,6 +660,100 @@ export function generateStandaloneHtml(project: DesignDocProject): string {
 </html>`;
 }
 
+export function generateStructuredJson(project: DesignDocProject): string {
+  const exportPayload = {
+    $schema: "https://docarch.ai/schemas/v1/architecture-spec.json",
+    exportVersion: "1.0.0",
+    exportedAt: new Date().toISOString(),
+    ...project,
+  };
+  return JSON.stringify(exportPayload, null, 2);
+}
+
+export function generateStructuredYaml(project: DesignDocProject): string {
+  const lines: string[] = [
+    "# DocArch AI - Architecture Specification",
+    `# Exported At: ${new Date().toISOString()}`,
+    "---",
+    `id: "${project.id}"`,
+    `designLevel: "${project.designLevel || "hld"}"`,
+    "metadata:",
+    `  title: "${project.metadata.title.replace(/"/g, '\\"')}"`,
+    `  version: "${project.metadata.version}"`,
+    `  status: "${project.metadata.status}"`,
+    `  lastUpdated: "${project.metadata.lastUpdated}"`,
+    `  authors: [${project.metadata.authors.map((a) => `"${a}"`).join(", ")}]`,
+    "requirements:",
+    `  domain: "${project.requirements.domain}"`,
+    "  targetScale:",
+    `    rps: ${project.requirements.targetScale.rps}`,
+    `    users: "${project.requirements.targetScale.users}"`,
+    `    dataRetention: "${project.requirements.targetScale.dataRetention}"`,
+    "  nonFunctionalRequirements:",
+    `    latency: "${project.requirements.nonFunctionalRequirements.latency}"`,
+    `    availability: "${project.requirements.nonFunctionalRequirements.availability}"`,
+    `    compliance: [${project.requirements.nonFunctionalRequirements.compliance.map((c) => `"${c}"`).join(", ")}]`,
+    "recommendations:",
+    `  selectedPattern: "${project.recommendations.selectedPattern}"`,
+    "  stack:",
+    `    frontend: "${project.recommendations.stack.frontend}"`,
+    `    backend: "${project.recommendations.stack.backend}"`,
+    `    database: "${project.recommendations.stack.database}"`,
+    `    caching: "${project.recommendations.stack.caching}"`,
+    `    messaging: "${project.recommendations.stack.messaging}"`,
+    `    devops: "${project.recommendations.stack.devops}"`,
+    "sectionsCount: " + (project.documentSections?.length || 0),
+  ];
+  return lines.join("\n");
+}
+
+export function generateDocxDocument(project: DesignDocProject): string {
+  const { metadata, requirements, recommendations, documentSections } = project;
+
+  const sectionsWordHtml = documentSections
+    .map((sec) => {
+      const contentHtml = convertMarkdownSectionToHtml(sec.contentMarkdown);
+      return `<div class="WordSection2" style="page-break-before:always;">
+        <h2 style="font-size:16pt; color:#1e1b4b; border-bottom:1pt solid #cbd5e1; padding-bottom:4pt;">${sec.title}</h2>
+        ${contentHtml}
+      </div>`;
+    })
+    .join("\n");
+
+  return `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset="utf-8">
+  <title>${metadata.title}</title>
+  <style>
+    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #0f172a; }
+    h1 { font-size: 24pt; font-weight: bold; color: #3730a3; margin-bottom: 8pt; }
+    h2 { font-size: 16pt; font-weight: bold; color: #1e1b4b; margin-top: 16pt; }
+    h3 { font-size: 13pt; font-weight: bold; color: #334155; }
+    table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+    th { background-color: #f1f5f9; border: 1pt solid #cbd5e1; padding: 6pt 8pt; font-weight: bold; text-align: left; }
+    td { border: 1pt solid #cbd5e1; padding: 6pt 8pt; }
+    blockquote { border-left: 3pt solid #6366f1; margin: 10pt 0; padding-left: 10pt; color: #475569; font-style: italic; }
+    pre { background: #f8fafc; border: 1pt solid #e2e8f0; padding: 8pt; font-family: Consolas, monospace; font-size: 9.5pt; }
+    code { font-family: Consolas, monospace; background: #f1f5f9; padding: 2pt 4pt; }
+    .meta-box { background-color: #f8fafc; border: 1pt solid #e2e8f0; padding: 12pt; margin: 16pt 0; }
+  </style>
+</head>
+<body>
+  <div class="WordSection1">
+    <h1>${metadata.title}</h1>
+    <p style="font-size: 13pt; color: #64748b;">Enterprise Technical Architecture & Design Document (HLD/LLD)</p>
+    <div class="meta-box">
+      <p><strong>Status:</strong> ${metadata.status} &nbsp;|&nbsp; <strong>Version:</strong> ${metadata.version} &nbsp;|&nbsp; <strong>Date:</strong> ${metadata.lastUpdated}</p>
+      <p><strong>Authors:</strong> ${metadata.authors.join(", ")}</p>
+      <p><strong>Pattern:</strong> ${recommendations.selectedPattern} &nbsp;|&nbsp; <strong>Target Scale:</strong> ${requirements.targetScale.rps.toLocaleString()} RPS (${requirements.targetScale.users})</p>
+      <p><strong>SLA Target:</strong> ${requirements.nonFunctionalRequirements.availability} (${requirements.nonFunctionalRequirements.latency})</p>
+    </div>
+  </div>
+  ${sectionsWordHtml}
+</body>
+</html>`;
+}
+
 export function downloadFile(filename: string, content: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

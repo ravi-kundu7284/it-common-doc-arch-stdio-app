@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { generateStandardDocument } from "@/lib/doc-generator";
 import { dbGetUserAiConfig } from "@/lib/supabase";
 import {

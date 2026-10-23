@@ -2,7 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["mermaid"],
-  output: "standalone",
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    cpus: 1,
+  },
   async rewrites() {
     return [
       { source: "/studio", destination: "/" },

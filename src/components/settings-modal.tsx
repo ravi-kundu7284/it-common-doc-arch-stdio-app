@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
 import { useDocStore } from "@/store/use-doc-store";
@@ -294,7 +294,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-200">Active Encrypted Key:</span>
                       <code className="font-mono text-indigo-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                        •••••••••••••••••{aiConfig.keyLast4}
+                        â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢{aiConfig.keyLast4}
                       </code>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">

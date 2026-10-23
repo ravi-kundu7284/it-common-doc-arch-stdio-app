@@ -29,8 +29,21 @@ import {
   CornerDownRight,
   Filter,
   FolderKanban,
+  Lock,
+  Unlock,
+  History,
+  GitCompare,
+  FileCode,
+  CheckCheck,
 } from "lucide-react";
-import { generateStandaloneHtml, generateRawMarkdown, downloadFile } from "@/lib/export-engine";
+import {
+  generateStandaloneHtml,
+  generateRawMarkdown,
+  generateDocxDocument,
+  generateStructuredYaml,
+  generateStructuredJson,
+  downloadFile,
+} from "@/lib/export-engine";
 import { ProjectsModal } from "./projects-modal";
 
 const SAMPLE_DIAGRAM_SNIPPETS = {
@@ -199,6 +212,8 @@ export const DocumentStudio: React.FC = () => {
     savedProjects,
     lastSavedAt,
     saveCurrentProjectToDrafts,
+    toggleSectionLock,
+    setProject,
   } = useDocStore();
 
   const { metadata, requirements, recommendations, documentSections, designLevel = "hld" } = currentProject;
@@ -211,9 +226,24 @@ export const DocumentStudio: React.FC = () => {
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
 
+  // Diff Modal State (Review AI changes before applying)
+  const [diffModal, setDiffModal] = useState<{
+    originalText: string;
+    proposedText: string;
+    sectionId: string;
+    sectionTitle: string;
+  } | null>(null);
+
+  // Revisions Modal State
+  const [isRevisionsOpen, setIsRevisionsOpen] = useState(false);
+  const [revisions, setRevisions] = useState<any[]>([]);
+  const [snapshotComment, setSnapshotComment] = useState("");
+  const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+
   // Projects Modal & Auto-save feedback state
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   // Section Filter: "all" | "hld" | "lld"
   const [sectionFilter, setSectionFilter] = useState<"all" | "hld" | "lld">("all");
@@ -335,8 +365,13 @@ export const DocumentStudio: React.FC = () => {
 
       const data = await res.json();
       if (data.success && data.content) {
-        setEditorText(data.content);
-        updateSectionContent(activeSection.id, data.content);
+        // Show visual diff modal to inspect changes before applying
+        setDiffModal({
+          originalText: activeSection.contentMarkdown,
+          proposedText: data.content,
+          sectionId: activeSection.id,
+          sectionTitle: activeSection.title,
+        });
         setAiInstruction("");
       }
     } catch (err) {
@@ -344,6 +379,85 @@ export const DocumentStudio: React.FC = () => {
     } finally {
       setIsAiRefining(false);
     }
+  };
+
+  const handleApplyDiff = () => {
+    if (!diffModal) return;
+    setEditorText(diffModal.proposedText);
+    updateSectionContent(diffModal.sectionId, diffModal.proposedText);
+    setDiffModal(null);
+  };
+
+  const handleDiscardDiff = () => {
+    setDiffModal(null);
+  };
+
+  const handleFetchRevisions = async () => {
+    try {
+      const res = await fetch(`/api/documents/revisions?projectId=${currentProject.id}`);
+      const data = await res.json();
+      if (data.success) {
+        setRevisions(data.revisions || []);
+      }
+    } catch (e) {
+      console.warn("Could not fetch revisions:", e);
+    }
+  };
+
+  const handleCreateSnapshot = async () => {
+    setIsSavingSnapshot(true);
+    try {
+      const res = await fetch("/api/documents/revisions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          projectId: currentProject.id,
+          title: snapshotComment.trim() || `Revision Snapshot (${new Date().toLocaleTimeString()})`,
+          comment: snapshotComment.trim(),
+          snapshot: currentProject,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSnapshotComment("");
+        handleFetchRevisions();
+      }
+    } catch (e) {
+      console.error("Save snapshot error:", e);
+    } finally {
+      setIsSavingSnapshot(false);
+    }
+  };
+
+  const handleRestoreRevision = async (rev: any) => {
+    if (!confirm(`Restore project to Revision #${rev.revision_number} (${rev.title})?`)) return;
+    try {
+      if (rev.snapshot) {
+        setProject(rev.snapshot);
+        setIsRevisionsOpen(false);
+      }
+    } catch (e) {
+      console.error("Restore error:", e);
+    }
+  };
+
+  const handleExportDocx = () => {
+    const docx = generateDocxDocument(currentProject);
+    const filename = `${metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${designLevel}.doc`;
+    downloadFile(filename, docx, "application/vnd.ms-word");
+  };
+
+  const handleExportYaml = () => {
+    const yaml = generateStructuredYaml(currentProject);
+    const filename = `${metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${designLevel}.yaml`;
+    downloadFile(filename, yaml, "text/yaml");
+  };
+
+  const handleExportJson = () => {
+    const jsonStr = generateStructuredJson(currentProject);
+    const filename = `${metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${designLevel}.json`;
+    downloadFile(filename, jsonStr, "application/json");
   };
 
   const handleExportHtml = () => {
@@ -357,6 +471,12 @@ export const DocumentStudio: React.FC = () => {
     navigator.clipboard.writeText(md);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2000);
+  };
+
+  const handleExportMarkdown = () => {
+    const md = generateRawMarkdown(currentProject);
+    const filename = `${metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${designLevel}.md`;
+    downloadFile(filename, md, "text/markdown");
   };
 
   // Filtered sections for sidebar navigation
@@ -522,6 +642,17 @@ export const DocumentStudio: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                handleFetchRevisions();
+                setIsRevisionsOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              title="Document Revision History & Named Snapshots"
+            >
+              <History className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Revisions</span>
+            </button>
+            <button
+              onClick={() => {
                 saveCurrentProjectToDrafts();
                 setDraftSavedFeedback(true);
                 setTimeout(() => setDraftSavedFeedback(false), 1500);
@@ -544,14 +675,79 @@ export const DocumentStudio: React.FC = () => {
             <span className="hidden sm:inline">{copiedNotification ? "Copied!" : "Copy"}</span>
           </button>
 
-          <button
-            onClick={handleExportHtml}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold shadow transition"
-            title="Download Standalone HTML Bundle"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          {/* Export Dropdown Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs font-semibold shadow transition"
+              title="Download Document (HTML, Word, Markdown, YAML, JSON)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
+              <ChevronDown className="w-3 h-3 ml-0.5 opacity-80" />
+            </button>
+
+            {isExportMenuOpen && (
+              <div
+                className="absolute right-0 mt-1 w-52 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1 z-50 text-xs text-slate-200"
+                onClick={() => setIsExportMenuOpen(false)}
+              >
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-800">
+                  Export Document As
+                </div>
+                <button
+                  onClick={handleExportDocx}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <div className="font-semibold">Microsoft Word (.doc)</div>
+                    <div className="text-[10px] text-slate-400">OpenXML document format</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportHtml}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <Eye className="w-4 h-4 text-indigo-400" />
+                  <div>
+                    <div className="font-semibold">Standalone HTML (.html)</div>
+                    <div className="text-[10px] text-slate-400">Self-contained responsive view</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportMarkdown}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <Code2 className="w-4 h-4 text-emerald-400" />
+                  <div>
+                    <div className="font-semibold">Markdown File (.md)</div>
+                    <div className="text-[10px] text-slate-400">Full raw markdown bundle</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportYaml}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <FileCode className="w-4 h-4 text-amber-400" />
+                  <div>
+                    <div className="font-semibold">Structured YAML (.yaml)</div>
+                    <div className="text-[10px] text-slate-400">CI/CD & Architecture as Code</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportJson}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-indigo-600/20 hover:text-indigo-200 transition"
+                >
+                  <FileCode className="w-4 h-4 text-purple-400" />
+                  <div>
+                    <div className="font-semibold">Structured JSON (.json)</div>
+                    <div className="text-[10px] text-slate-400">Machine-readable data spec</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -682,6 +878,11 @@ export const DocumentStudio: React.FC = () => {
                         {globalIndex + 1}.
                       </span>
                       <span className="truncate">{sec.title.replace(/^\d+\.\s*/, "")}</span>
+                      {sec.isLocked && (
+                        <span title="Locked against AI overwrites">
+                          <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                        </span>
+                      )}
                       {sec.level && (
                         <span
                           className={`text-[9px] px-1 py-0.2 rounded font-semibold uppercase shrink-0 ${
@@ -699,6 +900,24 @@ export const DocumentStudio: React.FC = () => {
 
                     {/* Action Controls on Hover */}
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0 ml-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSectionLock(sec.id);
+                        }}
+                        className={`p-0.5 transition ${
+                          sec.isLocked
+                            ? "text-amber-400 hover:text-amber-300"
+                            : "text-slate-500 hover:text-amber-400"
+                        }`}
+                        title={
+                          sec.isLocked
+                            ? "Section is Locked. Click to unlock."
+                            : "Lock section (protects against AI regeneration)"
+                        }
+                      >
+                        {sec.isLocked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3" />}
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -804,6 +1023,25 @@ export const DocumentStudio: React.FC = () => {
                   title="Rename this section"
                   className="bg-transparent border-b border-slate-700 text-indigo-300 font-semibold focus:outline-none focus:border-indigo-400 px-1 py-0.5 flex-1 min-w-0"
                 />
+                {activeSection && (
+                  <button
+                    type="button"
+                    onClick={() => toggleSectionLock(activeSection.id)}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition border shrink-0 ${
+                      activeSection.isLocked
+                        ? "bg-amber-950/70 border-amber-600/50 text-amber-300 hover:bg-amber-900/70"
+                        : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
+                    }`}
+                    title={
+                      activeSection.isLocked
+                        ? "Section is Locked: AI section alignment will not overwrite this section"
+                        : "Section is Unlocked: Click to protect against AI overwrite"
+                    }
+                  >
+                    {activeSection.isLocked ? <Lock className="w-3 h-3 text-amber-400" /> : <Unlock className="w-3 h-3" />}
+                    <span>{activeSection.isLocked ? "Locked" : "Lock"}</span>
+                  </button>
+                )}
               </div>
 
               {/* Diagram Inserters */}
@@ -1082,10 +1320,10 @@ export const DocumentStudio: React.FC = () => {
                     onChange={(e) => setNewSectionPosition(e.target.value as any)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white focus:border-indigo-500 focus:outline-none"
                   >
-                    <option value="start">📌 At Start (Beginning)</option>
-                    <option value="before">⬆️ Before Selected Section</option>
-                    <option value="after">⬇️ After Selected Section</option>
-                    <option value="end">🏁 At End (Bottom)</option>
+                    <option value="start">Top - At Start (Beginning)</option>
+                    <option value="before">Above - Before Selected Section</option>
+                    <option value="after">Below - After Selected Section</option>
+                    <option value="end">Bottom - At End (Bottom)</option>
                   </select>
                 </div>
               </div>
@@ -1163,6 +1401,184 @@ export const DocumentStudio: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: AI Diff Review (Non-destructive AI refinement) */}
+      {diffModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl border border-indigo-500/40 bg-slate-900 shadow-2xl flex flex-col text-xs text-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                  <GitCompare className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    Review AI Refinements: <span className="text-indigo-400">{diffModal.sectionTitle}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Non-destructive modification. Compare the AI suggestions against current text before applying.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleDiscardDiff}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Side-by-side comparison */}
+            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 flex-1 overflow-hidden min-h-[350px]">
+              {/* Left: Original */}
+              <div className="flex flex-col h-full overflow-hidden p-3 bg-slate-950/40">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-[11px] font-semibold text-slate-400">
+                  <span>Current Section Content</span>
+                  <span className="text-slate-500 font-mono text-[10px]">{diffModal.originalText.length} chars</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 bg-slate-950/80 rounded border border-slate-800 text-slate-300 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text">
+                  {diffModal.originalText || "(Empty section)"}
+                </div>
+              </div>
+
+              {/* Right: AI Proposed */}
+              <div className="flex flex-col h-full overflow-hidden p-3 bg-indigo-950/10">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-indigo-900/40 text-[11px] font-semibold text-indigo-300">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>AI Proposed Refinements</span>
+                  </span>
+                  <span className="text-indigo-400 font-mono text-[10px]">{diffModal.proposedText.length} chars</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 bg-slate-950/90 rounded border border-indigo-500/30 text-indigo-100 font-mono text-xs whitespace-pre-wrap leading-relaxed select-text shadow-inner">
+                  {diffModal.proposedText}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer with Actions */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Your manual edits in other sections are preserved untouched.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDiscardDiff}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition"
+                >
+                  Discard Changes
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyDiff}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow-lg shadow-indigo-600/30"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  <span>Accept & Apply Refinement</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Revisions & History */}
+      {isRevisionsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="relative w-full max-w-2xl max-h-[85vh] rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col text-xs text-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Document Revisions & Snapshots</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Capture named milestones and restore previous architecture states safely.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRevisionsOpen(false)}
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Create Snapshot Bar */}
+            <div className="p-3 bg-slate-950/60 border-b border-slate-800 flex items-center gap-2">
+              <input
+                type="text"
+                value={snapshotComment}
+                onChange={(e) => setSnapshotComment(e.target.value)}
+                placeholder="Name this milestone (e.g. 'Pre-CAB Approved Baseline', 'Sprint 3 Design')..."
+                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:border-cyan-500 focus:outline-none"
+              />
+              <button
+                onClick={handleCreateSnapshot}
+                disabled={isSavingSnapshot}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-semibold transition shrink-0"
+              >
+                {isSavingSnapshot ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <span>Snapshot</span>
+              </button>
+            </div>
+
+            {/* Revisions List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {revisions.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <History className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="font-medium">No snapshots saved for this project yet.</p>
+                  <p className="text-[11px] text-slate-600 mt-1">Create a milestone snapshot above to safeguard your progress.</p>
+                </div>
+              ) : (
+                revisions.map((rev) => (
+                  <div
+                    key={rev.id}
+                    className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 flex items-center justify-between transition"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">
+                          #{rev.revision_number} &bull; {rev.title}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                          {new Date(rev.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      {rev.comment && (
+                        <p className="text-[11px] text-slate-400 mt-1">{rev.comment}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleRestoreRevision(rev)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-600/30 text-slate-300 hover:text-cyan-200 border border-slate-700 hover:border-cyan-500/40 font-medium transition text-xs"
+                      title="Restore document to this revision"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsRevisionsOpen(false)}
+                className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

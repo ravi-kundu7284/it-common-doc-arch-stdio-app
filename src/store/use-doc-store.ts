@@ -1,19 +1,44 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { DesignDocProject, DocumentSection, DesignLevel, SavedProjectSummary } from "@/types";
+import {
+  DesignDocProject,
+  DocumentSection,
+  DesignLevel,
+  SavedProjectSummary,
+  DiagramItem,
+  WorkflowItem,
+  RequirementItem,
+  TraceLink,
+  AdrItem,
+  ArchitectureAuditResult,
+} from "@/types";
 import { PRESET_TEMPLATES, ARCHITECTURE_PATTERNS } from "@/lib/templates";
 import { generateStandardDocument, syncTitleAcrossSections } from "@/lib/doc-generator";
+import { DIAGRAM_CATALOG } from "@/lib/diagram-catalog";
+
+export type StudioTab =
+  | "wizard"
+  | "recommender"
+  | "studio"
+  | "diagrams"
+  | "workflows"
+  | "traceability"
+  | "adrs"
+  | "quality"
+  | "templates";
 
 interface DocState {
   currentProject: DesignDocProject;
   savedProjects: SavedProjectSummary[];
   lastSavedAt: string;
   activeStep: number;
-  activeTab: "wizard" | "recommender" | "studio" | "templates";
+  activeTab: StudioTab;
   studioViewMode: "split" | "preview" | "editor";
   selectedSectionId: string | null;
   isGenerating: boolean;
   selectedSectionIds: string[];
+  theme: "dark" | "light";
+  syncStatus: "saved" | "saving" | "unsaved";
   apiSettings: {
     provider: "builtin" | "openai" | "gemini" | "anthropic";
     apiKey: string;
@@ -27,7 +52,41 @@ interface DocState {
     project: DesignDocProject;
   }>;
 
+  // Visual Diagrams State
+  diagrams: DiagramItem[];
+  activeDiagramId: string | null;
+  saveDiagramItem: (diagram: DiagramItem) => void;
+  deleteDiagramItem: (id: string) => void;
+  setActiveDiagramId: (id: string | null) => void;
+
+  // Workflows State
+  workflows: WorkflowItem[];
+  activeWorkflowId: string | null;
+  saveWorkflowItem: (workflow: WorkflowItem) => void;
+  deleteWorkflowItem: (id: string) => void;
+  setActiveWorkflowId: (id: string | null) => void;
+
+  // Requirements & Traceability State
+  requirements: RequirementItem[];
+  traceLinks: TraceLink[];
+  saveRequirementItem: (req: RequirementItem) => void;
+  deleteRequirementItem: (id: string) => void;
+  saveTraceLinkItem: (link: TraceLink) => void;
+  deleteTraceLinkItem: (id: string) => void;
+
+  // ADRs State
+  adrs: AdrItem[];
+  saveAdrItem: (adr: AdrItem) => void;
+  deleteAdrItem: (id: string) => void;
+
+  // Architecture Quality Audit State
+  latestAudit: ArchitectureAuditResult | null;
+  setLatestAudit: (audit: ArchitectureAuditResult | null) => void;
+
   // Actions
+  toggleTheme: () => void;
+  setSyncStatus: (status: "saved" | "saving" | "unsaved") => void;
+  toggleSectionLock: (sectionId: string) => void;
   setDesignLevel: (level: DesignLevel, regenerate?: boolean) => void;
   setProject: (project: Partial<DesignDocProject>) => void;
   updateMetadata: (metadata: Partial<DesignDocProject["metadata"]>) => void;
@@ -50,7 +109,7 @@ interface DocState {
   saveCurrentAsTemplate: (customTitle: string, customDesc: string) => void;
   deleteCustomTemplate: (templateId: string) => void;
   setActiveStep: (step: number) => void;
-  setActiveTab: (tab: "wizard" | "recommender" | "studio" | "templates") => void;
+  setActiveTab: (tab: StudioTab) => void;
   setStudioViewMode: (mode: "split" | "preview" | "editor") => void;
   setSelectedSectionId: (id: string | null) => void;
   setIsGenerating: (val: boolean) => void;
@@ -160,28 +219,311 @@ const createInitialProject = (): DesignDocProject => {
   };
 };
 
+const createInitialDiagrams = (projectId: string): DiagramItem[] => {
+  return DIAGRAM_CATALOG.slice(0, 5).map((def, idx) => ({
+    id: `diag_init_${idx + 1}`,
+    projectId,
+    title: def.title,
+    diagramType: def.type,
+    mermaidCode: def.defaultMermaid,
+    visualModel: def.defaultVisualModel,
+    version: 1,
+    isLocked: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
+};
+
+const createInitialWorkflow = (projectId: string): WorkflowItem => ({
+  id: "wf_init_order",
+  projectId,
+  title: "Order Fulfillment & Settlement Workflow",
+  description: "End-to-end checkout orchestration with automated compensation and risk approval checkpoint.",
+  status: "published",
+  version: 1,
+  steps: [
+    { id: "s1", title: "Order Placement Webhook", type: "trigger", description: "Triggered on client POST /api/v1/orders" },
+    { id: "s2", title: "Verify Customer & Session", type: "task", description: "OIDC & Token verification" },
+    { id: "s3", title: "Check Fraud Score", type: "condition", description: "ML Risk model evaluation" },
+    { id: "s4", title: "Risk Officer Review", type: "approval", assignee: "Lead Risk Architect", description: "Manual sign-off if risk > 0.75" },
+    { id: "s5", title: "Reserve Inventory Hold", type: "task", timeoutSeconds: 30, retryPolicy: { maxRetries: 3, backoffMs: 200 }, description: "Atomic Redis hold" },
+    { id: "s6", title: "Release Inventory Hold", type: "compensation", description: "Rollback hold on payment decline" },
+    { id: "s7", title: "Charge Credit Card", type: "task", retryPolicy: { maxRetries: 2, backoffMs: 500 }, description: "Stripe/Adyen payment intent" },
+    { id: "s8", title: "Order Settled & Emitted", type: "end", description: "Terminal success state with Kafka event" },
+  ],
+  edges: [
+    { id: "e1", source: "s1", target: "s2" },
+    { id: "e2", source: "s2", target: "s3" },
+    { id: "e3", source: "s3", target: "s5", label: "Low Risk (<0.75)" },
+    { id: "e4", source: "s3", target: "s4", label: "High Risk (>=0.75)" },
+    { id: "e5", source: "s4", target: "s5", label: "Approved" },
+    { id: "e6", source: "s5", target: "s7" },
+    { id: "e7", source: "s7", target: "s8", label: "Payment Success" },
+    { id: "e8", source: "s7", target: "s6", isFailurePath: true, label: "Payment Failed" },
+  ],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+const createInitialRequirements = (projectId: string): RequirementItem[] => [
+  {
+    id: "req_init_1",
+    projectId,
+    stableId: "BR-001",
+    title: "Global Enterprise Multi-Tenancy",
+    category: "business",
+    priority: "critical",
+    status: "approved",
+    description: "System must strictly isolate data, rate limits, and audit trails across corporate enterprise tenants.",
+    acceptanceCriteria: ["Row Level Security (RLS) on all tenant tables", "Distinct KMS keys per enterprise tier"],
+    traceLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "req_init_2",
+    projectId,
+    stableId: "FR-001",
+    title: "WebAuthn & Hardware MFA Enforcement",
+    category: "functional",
+    priority: "high",
+    status: "approved",
+    description: "Provide FIDO2 passwordless and TOTP MFA for all architect and administrator accounts.",
+    acceptanceCriteria: ["YubiKey / WebAuthn passkey registration", "Backup recovery codes generated"],
+    traceLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "req_init_3",
+    projectId,
+    stableId: "NFR-001",
+    title: "Sub-100ms p99 Ingress Latency SLA",
+    category: "non_functional",
+    priority: "critical",
+    status: "approved",
+    description: "Edge CDN and API Gateway must serve authenticated cached read requests with p99 < 80ms.",
+    acceptanceCriteria: ["Redis tier caching response headers", "HTTP/3 and TLS 1.3 0-RTT enabled"],
+    traceLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "req_init_4",
+    projectId,
+    stableId: "NFR-002",
+    title: "Multi-AZ 99.999% High Availability & RPO < 5m",
+    category: "non_functional",
+    priority: "high",
+    status: "approved",
+    description: "Clustered database failover across 3 Availability Zones with automatic DNS health checks.",
+    acceptanceCriteria: ["Aurora Multi-AZ synchronous replication", "RTO < 15 minutes in disaster scenario"],
+    traceLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const createInitialAdrs = (projectId: string): AdrItem[] => [
+  {
+    id: "adr_init_1",
+    projectId,
+    stableId: "ADR-001",
+    title: "Adopt Event-Driven Microservices Style",
+    status: "accepted",
+    context: "The platform requires decoupled scaling of order ingestion, catalog queries, and billing pipelines.",
+    decisionDrivers: ["Independent deployment cadence", "Horizontal auto-scaling during flash sales", "Fault isolation"],
+    optionsConsidered: [
+      { option: "Event-Driven Microservices", pros: ["Elastic scaling", "Fault isolation"], cons: ["Eventual consistency"] },
+      { option: "Monolithic Application", pros: ["Single deployment", "ACID transactions"], cons: ["Scaling bottleneck"] },
+    ],
+    decision: "Adopt Event-Driven Microservices with Apache Kafka as the central immutable domain log.",
+    consequences: {
+      positive: ["Zero blast radius between order intake and analytics", "Independent CI/CD pipelines"],
+      negative: ["Requires distributed tracing and Transactional Outbox pattern"],
+    },
+    risks: ["Schema evolution requires Avro/Protobuf backward compatibility enforcement"],
+    author: "Chief Software Architect",
+    reviewers: ["Principal DevOps Architect", "Security Lead"],
+    relatedRequirementIds: ["BR-001", "NFR-001"],
+    relatedDiagramIds: ["diag_init_1"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "adr_init_2",
+    projectId,
+    stableId: "ADR-002",
+    title: "Standardize on gRPC for Internal East-West Communication",
+    status: "accepted",
+    context: "Inter-service HTTP/1.1 REST calls introduced significant JSON serialization overhead under 15,000 RPS.",
+    decisionDrivers: ["Protocol Buffers efficiency", "HTTP/2 multiplexing", "Strict schema contracts"],
+    optionsConsidered: [
+      { option: "gRPC + Protobuf", pros: ["7x faster serialization", "Streaming support"], cons: ["Requires proto compilation"] },
+      { option: "JSON over REST", pros: ["Human readable", "Simple debugging"], cons: ["High CPU parsing overhead"] },
+    ],
+    decision: "Enforce gRPC for all internal synchronous service-to-service communications.",
+    consequences: {
+      positive: ["55% reduction in internal latency", "Strong compile-time type safety"],
+      negative: ["Debugging requires grpcurl or Postman gRPC client"],
+    },
+    risks: ["Client retry loops must implement exponential backoff with jitter"],
+    author: "Lead Systems Architect",
+    reviewers: ["Core Engineering Leads"],
+    relatedRequirementIds: ["NFR-001"],
+    relatedDiagramIds: ["diag_init_2"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 function formatNow(): string {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 export const useDocStore = create<DocState>()(
   persist(
-    (set, get) => ({
-      currentProject: createInitialProject(),
-      savedProjects: [],
-      lastSavedAt: formatNow(),
-      activeStep: 1,
-      activeTab: "wizard",
-      studioViewMode: "split",
-      selectedSectionId: "hld-exec-summary",
-      isGenerating: false,
-      selectedSectionIds: [],
-      apiSettings: {
-        provider: "builtin",
-        apiKey: "",
-        modelName: "gemini-1.5-pro",
-      },
-      customTemplates: [],
+    (set, get) => {
+      const initProject = createInitialProject();
+
+      return {
+        currentProject: initProject,
+        savedProjects: [],
+        lastSavedAt: formatNow(),
+        activeStep: 1,
+        activeTab: "wizard",
+        studioViewMode: "split",
+        selectedSectionId: "hld-exec-summary",
+        isGenerating: false,
+        selectedSectionIds: [],
+        theme: "dark",
+        syncStatus: "saved",
+        apiSettings: {
+          provider: "builtin",
+          apiKey: "",
+          modelName: "gemini-1.5-pro",
+        },
+        customTemplates: [],
+
+        // Diagrams
+        diagrams: createInitialDiagrams(initProject.id),
+        activeDiagramId: "diag_init_1",
+        saveDiagramItem: (diagram) =>
+          set((state) => {
+            const exists = state.diagrams.findIndex((d) => d.id === diagram.id);
+            const updated = exists >= 0
+              ? state.diagrams.map((d, i) => (i === exists ? { ...diagram, updatedAt: new Date().toISOString() } : d))
+              : [...state.diagrams, { ...diagram, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+            return { diagrams: updated, lastSavedAt: formatNow(), syncStatus: "unsaved" };
+          }),
+        deleteDiagramItem: (id) =>
+          set((state) => ({
+            diagrams: state.diagrams.filter((d) => d.id !== id),
+            activeDiagramId: state.activeDiagramId === id ? state.diagrams[0]?.id || null : state.activeDiagramId,
+            lastSavedAt: formatNow(),
+          })),
+        setActiveDiagramId: (id) => set({ activeDiagramId: id }),
+
+        // Workflows
+        workflows: [createInitialWorkflow(initProject.id)],
+        activeWorkflowId: "wf_init_order",
+        saveWorkflowItem: (workflow) =>
+          set((state) => {
+            const exists = state.workflows.findIndex((w) => w.id === workflow.id);
+            const updated = exists >= 0
+              ? state.workflows.map((w, i) => (i === exists ? { ...workflow, updatedAt: new Date().toISOString() } : w))
+              : [...state.workflows, { ...workflow, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+            return { workflows: updated, lastSavedAt: formatNow(), syncStatus: "unsaved" };
+          }),
+        deleteWorkflowItem: (id) =>
+          set((state) => ({
+            workflows: state.workflows.filter((w) => w.id !== id),
+            activeWorkflowId: state.activeWorkflowId === id ? state.workflows[0]?.id || null : state.activeWorkflowId,
+            lastSavedAt: formatNow(),
+          })),
+        setActiveWorkflowId: (id) => set({ activeWorkflowId: id }),
+
+        // Requirements & Traceability
+        requirements: createInitialRequirements(initProject.id),
+        traceLinks: [
+          {
+            id: "tl_init_1",
+            requirement_id: "req_init_2",
+            targetType: "component",
+            targetId: "auth-service",
+            targetTitle: "Auth & Identity Service (OAuth/OIDC)",
+          },
+          {
+            id: "tl_init_2",
+            requirement_id: "req_init_2",
+            targetType: "diagram",
+            targetId: "diag_init_1",
+            targetTitle: "C4 System Context Diagram",
+          },
+        ],
+        saveRequirementItem: (req) =>
+          set((state) => {
+            const exists = state.requirements.findIndex((r) => r.id === req.id);
+            const updated = exists >= 0
+              ? state.requirements.map((r, i) => (i === exists ? { ...req, updatedAt: new Date().toISOString() } : r))
+              : [...state.requirements, { ...req, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+            return { requirements: updated, lastSavedAt: formatNow(), syncStatus: "unsaved" };
+          }),
+        deleteRequirementItem: (id) =>
+          set((state) => ({
+            requirements: state.requirements.filter((r) => r.id !== id),
+            traceLinks: state.traceLinks.filter((l) => l.requirement_id !== id && (l as any).requirementId !== id),
+            lastSavedAt: formatNow(),
+          })),
+        saveTraceLinkItem: (link) =>
+          set((state) => {
+            const id = link.id || `tl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            return {
+              traceLinks: [...state.traceLinks.filter((l) => l.id !== id), { ...link, id }],
+              lastSavedAt: formatNow(),
+            };
+          }),
+        deleteTraceLinkItem: (id) =>
+          set((state) => ({
+            traceLinks: state.traceLinks.filter((l) => l.id !== id),
+            lastSavedAt: formatNow(),
+          })),
+
+        // ADRs
+        adrs: createInitialAdrs(initProject.id),
+        saveAdrItem: (adr) =>
+          set((state) => {
+            const exists = state.adrs.findIndex((a) => a.id === adr.id);
+            const updated = exists >= 0
+              ? state.adrs.map((a, i) => (i === exists ? { ...adr, updatedAt: new Date().toISOString() } : a))
+              : [...state.adrs, { ...adr, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+            return { adrs: updated, lastSavedAt: formatNow(), syncStatus: "unsaved" };
+          }),
+        deleteAdrItem: (id) =>
+          set((state) => ({
+            adrs: state.adrs.filter((a) => a.id !== id),
+            lastSavedAt: formatNow(),
+          })),
+
+        // Quality Audit
+        latestAudit: null,
+        setLatestAudit: (audit) => set({ latestAudit: audit }),
+
+        // Theme & Sync Actions
+        toggleTheme: () => set((state) => ({ theme: state.theme === "dark" ? "light" : "dark" })),
+        setSyncStatus: (status) => set({ syncStatus: status }),
+
+        // Lock Section against AI modification
+        toggleSectionLock: (sectionId) =>
+          set((state) => ({
+            currentProject: {
+              ...state.currentProject,
+              documentSections: state.currentProject.documentSections.map((sec) =>
+                sec.id === sectionId ? { ...sec, isLocked: !sec.isLocked } : sec
+              ),
+            },
+            lastSavedAt: formatNow(),
+          })),
 
       // Save/Upsert Current Project into Drafts List
       saveCurrentProjectToDrafts: () => {
@@ -614,13 +956,22 @@ export const useDocStore = create<DocState>()(
           targetLevel
         );
 
+        // Preserve locked sections against automatic changes
+        const mergedSections = newSections.map((newSec) => {
+          const existing = currentProject.documentSections.find((s) => s.id === newSec.id);
+          if (existing && existing.isLocked) {
+            return existing;
+          }
+          return newSec;
+        });
+
         set((state) => ({
           currentProject: {
             ...state.currentProject,
             designLevel: targetLevel,
-            documentSections: newSections,
+            documentSections: mergedSections,
           },
-          selectedSectionId: newSections[0]?.id || null,
+          selectedSectionId: mergedSections[0]?.id || null,
           lastSavedAt: formatNow(),
         }));
       },
@@ -636,9 +987,10 @@ export const useDocStore = create<DocState>()(
           lastSavedAt: formatNow(),
         });
       },
-    }),
-    {
-      name: "docarch-ai-storage-v1",
+    };
+  },
+  {
+    name: "docarch-ai-storage-v1",
       partialize: (state) => ({
         currentProject: state.currentProject,
         savedProjects: state.savedProjects,
@@ -648,6 +1000,12 @@ export const useDocStore = create<DocState>()(
         studioViewMode: state.studioViewMode,
         customTemplates: state.customTemplates,
         apiSettings: state.apiSettings,
+        diagrams: state.diagrams,
+        workflows: state.workflows,
+        requirements: state.requirements,
+        traceLinks: state.traceLinks,
+        adrs: state.adrs,
+        theme: state.theme,
         lastSavedAt: state.lastSavedAt,
       }),
     }

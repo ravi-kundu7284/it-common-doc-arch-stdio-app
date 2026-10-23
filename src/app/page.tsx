@@ -5,6 +5,11 @@ import { Navbar } from "@/components/navbar";
 import { RequirementsWizard } from "@/components/requirements-wizard";
 import { ArchitectureRecommender } from "@/components/architecture-recommender";
 import { DocumentStudio } from "@/components/document-studio";
+import { DiagramDesigner } from "@/components/diagram-designer";
+import { WorkflowDesigner } from "@/components/workflow-designer";
+import { RequirementsRegistry } from "@/components/requirements-registry";
+import { AdrManager } from "@/components/adr-manager";
+import { QualityAuditView } from "@/components/quality-audit-view";
 import { useDocStore } from "@/store/use-doc-store";
 import { useAuthStore } from "@/store/use-auth-store";
 import { LoginLanding } from "@/components/login-landing";
@@ -57,6 +62,11 @@ export default function Home() {
         {activeTab === "wizard" && <RequirementsWizard />}
         {activeTab === "recommender" && <ArchitectureRecommender />}
         {activeTab === "studio" && <DocumentStudio />}
+        {activeTab === "diagrams" && <DiagramDesigner />}
+        {activeTab === "workflows" && <WorkflowDesigner />}
+        {activeTab === "traceability" && <RequirementsRegistry />}
+        {activeTab === "adrs" && <AdrManager />}
+        {activeTab === "quality" && <QualityAuditView />}
       </div>
     </main>
   );

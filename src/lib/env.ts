@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Universal environment variable resolver supporting:
  * 1. Node.js / Next.js process.env (build-time inlined & server)
  * 2. Cloudflare Pages edge runtime getRequestContext().env

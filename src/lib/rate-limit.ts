@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+﻿import { NextRequest } from "next/server";
 import { AppUser, dbUpdateUserLockout, dbRecordAuditLog } from "./supabase";
 
 // In-memory sliding window cache for IP throttling (5 attempts per minute)

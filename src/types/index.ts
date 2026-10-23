@@ -9,6 +9,259 @@ export interface DocumentSection {
   level?: "hld" | "lld" | "common";
   phase?: string;
   mermaidDiagrams?: string[];
+  isLocked?: boolean;
+  lastModifiedBy?: string;
+  updatedAt?: string;
+}
+
+export interface DocumentRevision {
+  id: string;
+  projectId: string;
+  revisionNumber: number;
+  title: string;
+  snapshot: DesignDocProject;
+  author: string;
+  comment: string;
+  createdAt: string;
+}
+
+// Diagram Types & Models
+export type DiagramType =
+  | "system_context"
+  | "container"
+  | "component"
+  | "cloud_deployment"
+  | "network"
+  | "uml_class"
+  | "sequence"
+  | "activity"
+  | "data_flow"
+  | "erd"
+  | "bpmn_workflow"
+  | "cicd_pipeline"
+  | "event_flow"
+  | "state_machine";
+
+export interface VisualNode {
+  id: string;
+  type?: string;
+  label: string;
+  subtext?: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  style?: {
+    backgroundColor?: string;
+    borderColor?: string;
+    textColor?: string;
+    shape?: "rectangle" | "rounded" | "cylinder" | "circle" | "cloud" | "diamond";
+  };
+  metadata?: Record<string, any>;
+}
+
+export interface VisualEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+  style?: {
+    strokeColor?: string;
+    strokeWidth?: number;
+    dashed?: boolean;
+    arrowHead?: boolean;
+  };
+}
+
+export interface DiagramItem {
+  id: string;
+  projectId: string;
+  title: string;
+  diagramType: DiagramType;
+  mermaidCode: string;
+  visualModel: {
+    nodes: VisualNode[];
+    edges: VisualEdge[];
+    viewport?: { x: number; y: number; zoom: number };
+  };
+  version: number;
+  isLocked?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Architecture Workflow Types
+export type WorkflowStepType =
+  | "trigger"
+  | "task"
+  | "approval"
+  | "condition"
+  | "parallel"
+  | "failure_path"
+  | "compensation"
+  | "end";
+
+export interface WorkflowStep {
+  id: string;
+  title: string;
+  type: WorkflowStepType;
+  description: string;
+  assignee?: string;
+  timeoutSeconds?: number;
+  retryPolicy?: {
+    maxRetries: number;
+    backoffMs: number;
+  };
+  config?: Record<string, any>;
+}
+
+export interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  condition?: string;
+  isFailurePath?: boolean;
+  label?: string;
+}
+
+export interface WorkflowItem {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: "draft" | "published" | "archived";
+  steps: WorkflowStep[];
+  edges: WorkflowEdge[];
+  version: number;
+  validation?: {
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Requirements Traceability & Impact Analysis
+export type RequirementCategory = "business" | "functional" | "non_functional";
+export type RequirementStatus = "draft" | "approved" | "implemented" | "verified" | "deprecated";
+export type RequirementPriority = "critical" | "high" | "medium" | "low";
+
+export interface TraceLink {
+  id: string;
+  projectId?: string;
+  requirementId?: string;
+  requirement_id?: string;
+  targetType: "component" | "api" | "data_model" | "diagram" | "test_case" | "section";
+  targetId: string;
+  targetTitle: string;
+}
+
+export interface RequirementItem {
+  id: string;
+  projectId: string;
+  stableId: string; // e.g. BR-001, FR-001, NFR-001
+  title: string;
+  category: RequirementCategory;
+  priority: RequirementPriority;
+  status: RequirementStatus;
+  description: string;
+  acceptanceCriteria: string[];
+  traceLinks: TraceLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImpactAnalysisResult {
+  requirementId: string;
+  stableId: string;
+  changeDescription: string;
+  impactedComponents: string[];
+  impactedDiagrams: string[];
+  impactedApis: string[];
+  impactedSections: string[];
+  proposedUpdates: {
+    sectionId: string;
+    sectionTitle: string;
+    currentSummary: string;
+    proposedChange: string;
+  }[];
+}
+
+// Architecture Decision Records (ADR)
+export type AdrStatus = "proposed" | "accepted" | "rejected" | "deprecated" | "superseded";
+
+export interface AdrOption {
+  option: string;
+  pros: string[];
+  cons: string[];
+}
+
+export interface AdrItem {
+  id: string;
+  projectId: string;
+  stableId: string; // e.g. ADR-001
+  title: string;
+  status: AdrStatus;
+  context: string;
+  decisionDrivers: string[];
+  optionsConsidered: AdrOption[];
+  decision: string;
+  consequences: {
+    positive: string[];
+    negative: string[];
+  };
+  risks: string[];
+  relatedRequirementIds: string[];
+  relatedDiagramIds: string[];
+  author: string;
+  reviewers: string[];
+  supersededBy?: string; // id or stableId of superseding ADR
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Architecture Quality & Validation Engine
+export type FindingSeverity = "critical" | "high" | "medium" | "low";
+export type FindingCategory =
+  | "scalability"
+  | "security"
+  | "reliability"
+  | "coupling"
+  | "data_consistency"
+  | "observability"
+  | "cost"
+  | "compliance";
+export type FindingStatus = "open" | "accepted" | "fixed" | "dismissed";
+
+export interface ArchitectureFinding {
+  id: string;
+  stableId: string;
+  severity: FindingSeverity;
+  category: FindingCategory;
+  component: string;
+  title: string;
+  description: string;
+  whyItMatters: string;
+  remediation: string;
+  tradeOffs: string;
+  confidence: number; // 0 - 100
+  status: FindingStatus;
+}
+
+export interface ArchitectureAuditResult {
+  id: string;
+  projectId: string;
+  overallScore: number; // 0 - 100
+  evaluatedAt: string;
+  findings: ArchitectureFinding[];
+  summary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    fixed: number;
+  };
 }
 
 export interface SavedProjectSummary {

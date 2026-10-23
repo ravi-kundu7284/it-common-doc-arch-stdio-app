@@ -29,4 +29,7 @@
     <!-- 007: Row Level Security (RLS) and Seed Enterprise Accounts -->
     <include file="changesets/007-enable-rls-and-seed.sql" relativeToChangelogFile="true"/>
 
+    <!-- 008: Architecture Artifacts (Projects, Sections, Revisions, Diagrams, Workflows, Requirements, ADRs, Audits) -->
+    <include file="changesets/008-create-architecture-artifacts.sql" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

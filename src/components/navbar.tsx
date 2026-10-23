@@ -30,7 +30,13 @@ import {
   Menu,
   X,
 } from "lucide-react";
-import { generateRawMarkdown, generateStandaloneHtml, downloadFile } from "@/lib/export-engine";
+import {
+  generateRawMarkdown,
+  generateStandaloneHtml,
+  generateDocxDocument,
+  generateStructuredYaml,
+  downloadFile,
+} from "@/lib/export-engine";
 import { useSupportStore } from "@/store/use-support-store";
 import { TemplatesModal } from "./templates-modal";
 import { SettingsModal } from "./settings-modal";
@@ -71,17 +77,22 @@ export const Navbar: React.FC = () => {
 
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const helpDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsExportOpen(false);
+      }
+      if (helpDropdownRef.current && !helpDropdownRef.current.contains(e.target as Node)) {
+        setIsHelpOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -99,6 +110,20 @@ export const Navbar: React.FC = () => {
     const md = generateRawMarkdown(currentProject);
     const filename = `${currentProject.metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-architecture.md`;
     downloadFile(filename, md, "text/markdown");
+    setIsExportOpen(false);
+  };
+
+  const handleExportDocx = () => {
+    const docx = generateDocxDocument(currentProject);
+    const filename = `${currentProject.metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-architecture.doc`;
+    downloadFile(filename, docx, "application/vnd.ms-word");
+    setIsExportOpen(false);
+  };
+
+  const handleExportYaml = () => {
+    const yaml = generateStructuredYaml(currentProject);
+    const filename = `${currentProject.metadata.title.toLowerCase().replace(/[^a-z0-9]/g, "-")}-architecture.yaml`;
+    downloadFile(filename, yaml, "text/yaml");
     setIsExportOpen(false);
   };
 
@@ -129,188 +154,95 @@ export const Navbar: React.FC = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950/85 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Logo & Tagline */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-black text-lg">
-              <Layers className="w-5 h-5 text-white" />
+      <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
+        {/* Tier 1: Brand, Quick Status & Global Actions */}
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-3 border-b border-slate-900">
+          {/* Logo, Title & Mode Toggle */}
+          <div className="flex items-center gap-3 shrink-0 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-black text-base shrink-0">
+              <Layers className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white">
-                  DocArch <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">AI</span>
-                </span>
-                
-                {/* HLD / LLD Quick Toggle */}
-                <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setDesignLevel("hld")}
-                    className={`px-1.5 py-0.5 rounded font-bold transition ${
-                      currentProject.designLevel === "hld"
-                        ? "bg-emerald-600 text-white shadow-sm"
-                        : "text-slate-400 hover:text-emerald-300"
-                    }`}
-                    title="High-Level Design Mode"
-                  >
-                    HLD
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDesignLevel("lld")}
-                    className={`px-1.5 py-0.5 rounded font-bold transition ${
-                      currentProject.designLevel === "lld"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-slate-400 hover:text-indigo-300"
-                    }`}
-                    title="Low-Level Design Mode"
-                  >
-                    LLD
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDesignLevel("full")}
-                    className={`px-1.5 py-0.5 rounded font-bold transition ${
-                      currentProject.designLevel === "full"
-                        ? "bg-cyan-600 text-white shadow-sm"
-                        : "text-slate-400 hover:text-cyan-300"
-                    }`}
-                    title="Full Architecture Mode (HLD + LLD)"
-                  >
-                    Full
-                  </button>
-                </div>
+
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="font-extrabold text-sm sm:text-base tracking-tight text-white shrink-0">
+                DocArch <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">AI</span>
+              </span>
+
+              {/* HLD / LLD Quick Toggle */}
+              <div className="flex items-center p-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[10px] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDesignLevel("hld")}
+                  className={`px-1.5 py-0.5 rounded font-bold transition ${
+                    currentProject.designLevel === "hld"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-400 hover:text-emerald-300"
+                  }`}
+                  title="High-Level Design Mode"
+                >
+                  HLD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDesignLevel("lld")}
+                  className={`px-1.5 py-0.5 rounded font-bold transition ${
+                    currentProject.designLevel === "lld"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-slate-400 hover:text-indigo-300"
+                  }`}
+                  title="Low-Level Design Mode"
+                >
+                  LLD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDesignLevel("full")}
+                  className={`px-1.5 py-0.5 rounded font-bold transition ${
+                    currentProject.designLevel === "full"
+                      ? "bg-cyan-600 text-white shadow-xs"
+                      : "text-slate-400 hover:text-cyan-300"
+                  }`}
+                  title="Full Architecture Mode (HLD + LLD)"
+                >
+                  Full
+                </button>
               </div>
-              <div className="text-[11px] text-slate-400 truncate max-w-[200px] hidden sm:block">
-                {currentProject.metadata.title}
+
+              <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-800 text-slate-400 text-xs min-w-0">
+                <span className="truncate max-w-[240px] font-medium text-slate-300" title={currentProject.metadata.title}>
+                  {currentProject.metadata.title}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Workflow Stepper Navigation */}
-          <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium">
-            <button
-              onClick={() => setActiveTab("wizard")}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
-                activeTab === "wizard"
-                  ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
-              <span>Requirements Intake</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("recommender")}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
-                activeTab === "recommender"
-                  ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
-              <span>AI Recommender</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab("studio")}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
-                activeTab === "studio"
-                  ? "bg-indigo-600 text-white shadow-sm font-semibold"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
-              <span>Document Studio</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping ml-0.5" />
-            </button>
-          </nav>
-
-          {/* Utility Actions & User Auth */}
-          <div className="flex items-center gap-2">
+          {/* Right: Primary Utilities */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* My Projects & Drafts */}
             <button
               onClick={() => setIsProjectsOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition shrink-0"
               title="Open My Projects & Drafts"
             >
               <FolderKanban className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden sm:inline">Projects</span>
               {savedProjects.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 font-bold">
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-indigo-300 font-bold">
                   {savedProjects.length}
                 </span>
               )}
             </button>
 
-            {/* Templates Library */}
-            <button
-              onClick={() => setIsTemplatesOpen(true)}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
-              title="Browse reference architecture templates"
-            >
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Templates</span>
-            </button>
-
-            {/* AI Settings / Vault */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="hidden lg:flex relative p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition"
-              title="AI Provider & Key Vault Settings"
-            >
-              <Settings className="w-4 h-4 text-slate-300" />
-              {aiConfig?.hasKey && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              )}
-            </button>
-
-            {/* Support Desk & Issue Tracking */}
-            <button
-              onClick={() => setSupportModalOpen(true)}
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
-              title="Support Desk & Issue Ticket Tracking"
-            >
-              <LifeBuoy className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden xl:inline">Support</span>
-              {openTicketsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-900/80 text-blue-300 font-bold border border-blue-700/50">
-                  {openTicketsCount}
-                </span>
-              )}
-            </button>
-
-            {/* Feedback */}
-            <button
-              onClick={() => setFeedbackModalOpen(true)}
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition"
-              title="Share Feedback & Suggestions"
-            >
-              <MessageSquareHeart className="w-3.5 h-3.5 text-pink-400" />
-              <span className="hidden xl:inline">Feedback</span>
-            </button>
-
-            {/* Mobile / Tablet Menu Button */}
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white xl:hidden transition flex items-center justify-center"
-              title={isMobileMenuOpen ? "Close Menu" : "Open Navigation Menu"}
-            >
-              {isMobileMenuOpen ? <X className="w-4 h-4 text-indigo-400" /> : <Menu className="w-4 h-4" />}
-            </button>
-
             {/* Export Dropdown */}
-            <div className="relative" ref={dropdownRef}>
+            <div className="relative shrink-0" ref={dropdownRef}>
               <button
                 onClick={() => setIsExportOpen(!isExportOpen)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition shrink-0"
+                title="Download architecture specifications"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export</span>
-                <ChevronDown className="w-3.5 h-3.5 ml-0.5" />
+                <ChevronDown className="w-3 h-3 ml-0.5 opacity-80" />
               </button>
 
               {isExportOpen && (
@@ -353,6 +285,28 @@ export const Navbar: React.FC = () => {
                   </button>
 
                   <button
+                    onClick={handleExportDocx}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    <div>
+                      <div className="font-medium">Word Document (.doc)</div>
+                      <div className="text-[10px] text-slate-400">Microsoft Word OpenXML with tables & styling</div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={handleExportYaml}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <FileCode className="w-4 h-4 text-purple-400" />
+                    <div>
+                      <div className="font-medium">Structured YAML (.yaml)</div>
+                      <div className="text-[10px] text-slate-400">Clean architecture spec format</div>
+                    </div>
+                  </button>
+
+                  <button
                     onClick={handleExportJson}
                     className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
                   >
@@ -378,11 +332,107 @@ export const Navbar: React.FC = () => {
               )}
             </div>
 
+            {/* AI Settings / Vault */}
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="relative p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition shrink-0"
+              title="AI Provider & Key Vault Settings"
+            >
+              <Settings className="w-4 h-4 text-slate-300" />
+              {aiConfig?.hasKey && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </button>
+
+            {/* Help & Community Dropdown */}
+            <div className="relative shrink-0" ref={helpDropdownRef}>
+              <button
+                onClick={() => setIsHelpOpen(!isHelpOpen)}
+                className="relative flex items-center gap-1 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition shrink-0"
+                title="Templates, Support & Community"
+              >
+                <LifeBuoy className="w-4 h-4 text-cyan-400" />
+                {openTicketsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                )}
+              </button>
+
+              {isHelpOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-700 bg-slate-900 shadow-2xl py-1.5 z-50 text-xs animate-in fade-in">
+                  <div className="px-3 py-1.5 border-b border-slate-800 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Help & Resources
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      setIsTemplatesOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-400" />
+                    <div>
+                      <div className="font-medium">Architecture Templates</div>
+                      <div className="text-[10px] text-slate-400">Battle-tested reference systems</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      setSupportModalOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <LifeBuoy className="w-4 h-4 text-cyan-400" />
+                    <div className="flex-1">
+                      <div className="font-medium flex items-center justify-between">
+                        <span>Support Desk</span>
+                        {openTicketsCount > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-blue-900 text-blue-300 font-bold">
+                            {openTicketsCount} open
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-400">Report issues & track status</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      setFeedbackModalOpen(true);
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-slate-200 hover:bg-slate-800 hover:text-white transition"
+                  >
+                    <MessageSquareHeart className="w-4 h-4 text-pink-400" />
+                    <div>
+                      <div className="font-medium">Share Feedback</div>
+                      <div className="text-[10px] text-slate-400">Suggest new features & fixes</div>
+                    </div>
+                  </button>
+                  <div className="my-1 border-t border-slate-800" />
+                  <button
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      if (confirm("Reset current project to initial baseline?")) {
+                        resetProject();
+                      }
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-left text-red-300 hover:bg-slate-800 transition"
+                  >
+                    <RotateCcw className="w-4 h-4 text-red-400" />
+                    <div>
+                      <div className="font-medium">Reset Project</div>
+                      <div className="text-[10px] text-slate-400">Revert to default template</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Admin Portal Button (If user is Administrator) */}
             {isAuthenticated && user?.role === "admin" && (
               <Link
                 href="/admin"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold shadow-sm transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold shadow-xs transition shrink-0"
                 title="Open Administrator Control Portal"
               >
                 <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
@@ -390,18 +440,15 @@ export const Navbar: React.FC = () => {
               </Link>
             )}
 
-            {/* User Authentication & Sign Off Button */}
+            {/* User Profile */}
             {isAuthenticated ? (
-              <div className="flex items-center gap-1.5 p-1 pl-2 pr-1.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="flex items-center gap-1.5 p-1 pl-2 pr-1.5 rounded-xl bg-slate-900 border border-slate-800 shrink-0">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center font-bold text-[11px] text-white">
                   {user?.username.charAt(0).toUpperCase()}
                 </div>
-                <div className="hidden lg:block text-left mr-1">
+                <div className="hidden xl:block text-left mr-1">
                   <div className="text-[11px] font-semibold text-slate-200 leading-tight">
                     @{user?.username}
-                  </div>
-                  <div className="text-[9px] text-slate-400 truncate max-w-[120px] leading-tight" title={user?.designation}>
-                    {user?.designation || "Architect"}
                   </div>
                 </div>
                 <button
@@ -415,26 +462,107 @@ export const Navbar: React.FC = () => {
             ) : (
               <button
                 onClick={() => openAuthModal("signin")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition shrink-0"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Sign In</span>
               </button>
             )}
-
-            {/* Reset Project */}
-            <button
-              onClick={() => {
-                if (confirm("Reset current project to initial baseline?")) {
-                  resetProject();
-                }
-              }}
-              className="hidden md:flex p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-              title="Reset Project"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
           </div>
+        </div>
+
+        {/* Tier 2: Dedicated Studio Workspace Tabs Navigation Bar */}
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-11 flex items-center bg-slate-950/75 border-t border-slate-900">
+          <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 w-full text-xs font-medium">
+            <button
+              onClick={() => setActiveTab("wizard")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "wizard"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>1. Requirements Intake</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("recommender")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "recommender"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>2. AI Recommender</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("studio")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "studio"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>3. Document Studio</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping ml-0.5" />
+            </button>
+
+            <button
+              onClick={() => setActiveTab("diagrams")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "diagrams"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>4. Diagram Designer</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("workflows")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "workflows"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>5. Workflow Designer</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("traceability")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "traceability"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>6. Requirements Traceability</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("adrs")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "adrs"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>7. ADR Governance</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("quality")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
+                activeTab === "quality"
+                  ? "bg-indigo-600 text-white shadow-xs font-semibold"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <span>8. Architecture Quality Audit</span>
+            </button>
+          </nav>
         </div>
       </header>
 
@@ -500,6 +628,96 @@ export const Navbar: React.FC = () => {
                     <span>3. Document Studio</span>
                   </div>
                   {activeTab === "studio" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("diagrams");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "diagrams"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">4</span>
+                    <span>4. Interactive Diagrams</span>
+                  </div>
+                  {activeTab === "diagrams" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("workflows");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "workflows"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">5</span>
+                    <span>5. Workflow Designer</span>
+                  </div>
+                  {activeTab === "workflows" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("traceability");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "traceability"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">6</span>
+                    <span>6. Requirements Traceability</span>
+                  </div>
+                  {activeTab === "traceability" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("adrs");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "adrs"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">7</span>
+                    <span>7. Architecture Decision Records</span>
+                  </div>
+                  {activeTab === "adrs" && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab("quality");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                    activeTab === "quality"
+                      ? "bg-indigo-600 text-white border-indigo-500 font-bold shadow-md"
+                      : "bg-slate-900 border-slate-800 text-slate-300 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">8</span>
+                    <span>8. Quality & Validation Engine</span>
+                  </div>
+                  {activeTab === "quality" && <Check className="w-4 h-4" />}
                 </button>
               </div>
             </div>

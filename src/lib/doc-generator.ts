@@ -1,4 +1,4 @@
-import { DesignDocProject, DocumentSection, DesignLevel } from "@/types";
+﻿import { DesignDocProject, DocumentSection, DesignLevel } from "@/types";
 
 /**
  * Replace occurrences of a previous title or domain across all document sections.
