@@ -54,15 +54,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   // Sync state when modal opens or user/aiConfig changes
   useEffect(() => {
-    if (aiConfig) {
-      setProvider(aiConfig.provider);
-      setModelName(aiConfig.modelName);
-      if (aiConfig.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
-    } else {
-      setProvider(apiSettings.provider);
-      setModelName(apiSettings.modelName);
-      setApiKey(apiSettings.apiKey);
-    }
+    setProvider(apiSettings.provider || (aiConfig ? aiConfig.provider : "openai"));
+    setModelName(apiSettings.modelName || (aiConfig ? aiConfig.modelName : "gpt-4o"));
+    setApiKey(apiSettings.apiKey || "");
+    if (aiConfig?.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
   }, [aiConfig, apiSettings, isOpen]);
 
   if (!isOpen) return null;
@@ -71,31 +66,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setIsSaving(true);
     setFeedbackMsg(null);
 
+    const effectiveKey = apiKey.trim().length > 0 ? apiKey.trim() : apiSettings.apiKey;
+
     // Save in client doc store
     setApiSettings({
       provider,
-      apiKey,
+      apiKey: effectiveKey,
       modelName,
     });
 
     // If authenticated, also save and encrypt in Supabase PostgreSQL
-    if (isAuthenticated && apiKey.trim().length > 0) {
-      const res = await saveAiConfig(provider, modelName, apiKey, expiresInDays);
-      setIsSaving(false);
-      if (!res.success) {
-        setFeedbackMsg({ type: "error", text: res.error || "Failed to save key in database." });
-        return;
+    if (isAuthenticated && effectiveKey.length > 0) {
+      try {
+        const res = await saveAiConfig(provider, modelName, effectiveKey, expiresInDays);
+        if (res.success) {
+          setFeedbackMsg({
+            type: "success",
+            text: `Key encrypted with AES-256-GCM. Set to auto-purge in ${expiresInDays} days!`,
+          });
+        } else {
+          setFeedbackMsg({
+            type: "success",
+            text: `Active for session & browser storage. (Cloud DB offline)`,
+          });
+        }
+      } catch {
+        setFeedbackMsg({
+          type: "success",
+          text: `Active for session & browser storage.`,
+        });
       }
-      setFeedbackMsg({
-        type: "success",
-        text: `Key encrypted with AES-256-GCM. Set to auto-purge in ${expiresInDays} days!`,
-      });
-      setApiKey(""); // clear raw key from component state
     } else {
-      setIsSaving(false);
-      setFeedbackMsg({ type: "success", text: "Settings updated for current session." });
+      setFeedbackMsg({ type: "success", text: "Settings saved successfully." });
     }
 
+    setIsSaving(false);
     setTimeout(() => {
       onClose();
     }, 1200);

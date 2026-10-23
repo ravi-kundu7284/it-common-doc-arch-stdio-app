@@ -96,6 +96,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    console.log(
+      `[/api/generate] promptType="${promptType}", provider="${provider}", model="${modelName}", hasClientKey=${Boolean(
+        apiSettings?.apiKey
+      )}, resolvedKeyEndsIn="...${apiKey ? apiKey.slice(-4) : "NONE"}"`
+    );
+
     // 3. Handle explicit offline requests
     if (allowOfflineFallback && !apiKey) {
       if (promptType === "analyze_requirements") {
@@ -145,10 +151,12 @@ export async function POST(req: NextRequest) {
     if (provider === "openai" || provider === "builtin") {
       try {
         const aiConfig = { apiKey, modelName };
+        console.log(`[/api/generate] 🚀 Calling OpenAI API (promptType="${promptType}", Model: ${modelName}, Key: ...${apiKey.slice(-4)})`);
 
         // Action A: Analyze Requirements with OpenAI
         if (promptType === "analyze_requirements") {
           const analysis = await generateRequirementAnalysisWithOpenAi(prompt || "", aiConfig);
+          console.log(`[/api/generate] ✅ OpenAI generated requirements analysis for: "${analysis.projectName}"`);
           return NextResponse.json({
             success: true,
             analysis,
@@ -170,6 +178,7 @@ export async function POST(req: NextRequest) {
             targetTitle,
             aiConfig
           );
+          console.log(`[/api/generate] ✅ OpenAI refined section: "${targetTitle}"`);
 
           return NextResponse.json({
             success: true,
@@ -187,6 +196,7 @@ export async function POST(req: NextRequest) {
             sectionTitle,
             aiConfig
           );
+          console.log(`[/api/generate] ✅ OpenAI generated content for doc: "${documentType}"`);
 
           return NextResponse.json({
             success: true,
@@ -199,6 +209,7 @@ export async function POST(req: NextRequest) {
         // Action D: Architecture Quality & Threat Audit with OpenAI
         if (promptType === "audit_architecture") {
           const aiFindings = await auditArchitectureWithOpenAi(projectData, aiConfig);
+          console.log(`[/api/generate] ✅ OpenAI audited architecture, returned ${aiFindings.length} findings`);
           return NextResponse.json({
             success: true,
             findings: aiFindings,

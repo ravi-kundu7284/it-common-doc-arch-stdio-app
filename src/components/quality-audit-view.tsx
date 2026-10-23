@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 export const QualityAuditView: React.FC = () => {
-  const { currentProject, latestAudit, setLatestAudit, updateSectionContent } = useDocStore();
+  const { currentProject, latestAudit, setLatestAudit, updateSectionContent, apiSettings } = useDocStore();
 
   const [activeAudit, setActiveAudit] = useState<ArchitectureAuditResult | null>(
     latestAudit || auditProjectArchitecture(currentProject)
@@ -46,9 +46,11 @@ export const QualityAuditView: React.FC = () => {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           promptType: "audit_architecture",
           projectData: currentProject,
+          apiSettings,
         }),
       });
 

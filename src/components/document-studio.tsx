@@ -391,6 +391,7 @@ export const DocumentStudio: React.FC = () => {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           promptType: "refine_section",
           projectData: currentProject,

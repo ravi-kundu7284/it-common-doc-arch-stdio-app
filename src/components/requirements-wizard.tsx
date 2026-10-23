@@ -59,6 +59,7 @@ export const RequirementsWizard: React.FC = () => {
     setDesignLevel,
     regenerateDocumentSections,
     applyAiAnalysisToProject,
+    apiSettings,
   } = useDocStore();
 
   // Top level intake mode: "ai-prompt" or "structured-form"
@@ -170,9 +171,11 @@ export const RequirementsWizard: React.FC = () => {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           promptType: "analyze_requirements",
           prompt: naturalPrompt,
+          apiSettings,
           allowOfflineFallback: forceOffline,
         }),
       });
