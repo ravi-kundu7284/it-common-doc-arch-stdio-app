@@ -43,6 +43,8 @@ import {
   FileStack,
   CheckCircle2,
   Search,
+  AlertTriangle,
+  Settings,
 } from "lucide-react";
 import {
   generateStandaloneHtml,
@@ -248,6 +250,7 @@ export const DocumentStudio: React.FC = () => {
   const [editorText, setEditorText] = useState(activeSection?.contentMarkdown || "");
   const [aiInstruction, setAiInstruction] = useState("");
   const [isAiRefining, setIsAiRefining] = useState(false);
+  const [aiError, setAiError] = useState<{ code?: string; message: string } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
@@ -382,6 +385,7 @@ export const DocumentStudio: React.FC = () => {
   const handleAiRefine = async () => {
     if (!aiInstruction.trim() || !activeSection) return;
     setIsAiRefining(true);
+    setAiError(null);
 
     try {
       const res = await fetch("/api/generate", {
@@ -397,6 +401,14 @@ export const DocumentStudio: React.FC = () => {
       });
 
       const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAiError({
+          code: data.code || "AI_ERROR",
+          message: data.error || "Failed to refine section with OpenAI.",
+        });
+        return;
+      }
+
       if (data.success && data.content) {
         // Show visual diff modal to inspect changes before applying
         setDiffModal({
@@ -407,8 +419,12 @@ export const DocumentStudio: React.FC = () => {
         });
         setAiInstruction("");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI refine error:", err);
+      setAiError({
+        code: "NETWORK_ERROR",
+        message: err?.message || "Failed to connect to AI generation service.",
+      });
     } finally {
       setIsAiRefining(false);
     }
@@ -1259,6 +1275,36 @@ export const DocumentStudio: React.FC = () => {
               />
             </div>
 
+            {/* AI Error Alert Banner */}
+            {aiError && (
+              <div className="px-3.5 py-2.5 bg-amber-950/40 border-t border-amber-500/30 flex items-center justify-between gap-3 text-xs text-amber-200 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-medium">{aiError.message}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const btn = document.querySelector('[data-testid="settings-btn"]') as HTMLElement;
+                      if (btn) btn.click();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500 hover:text-black border border-amber-400/40 text-[11px] font-bold text-amber-300 transition"
+                  >
+                    Configure Key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiError(null)}
+                    className="p-1 hover:text-white text-slate-400 transition"
+                    title="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* AI Assistant Bar */}
             <div className="p-3 bg-slate-900/80 border-t border-slate-800 flex items-center gap-2">
               <div className="flex items-center gap-1.5 text-xs text-indigo-400 font-semibold shrink-0">
@@ -1501,6 +1547,28 @@ export const DocumentStudio: React.FC = () => {
 
                 {/* Custom Instruction Box */}
                 <div className="space-y-2 pt-2 border-t border-slate-800">
+                  {aiError && (
+                    <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-amber-300 block">AI Notice</span>
+                          <span className="text-[11px] leading-tight block text-amber-200/90">{aiError.message}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const btn = document.querySelector('[data-testid="settings-btn"]') as HTMLElement;
+                          if (btn) btn.click();
+                        }}
+                        className="w-full py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 hover:text-black border border-amber-400/40 text-xs font-bold text-amber-300 transition"
+                      >
+                        Configure Key in Settings
+                      </button>
+                    </div>
+                  )}
+
                   <label className="block text-[11px] font-semibold text-slate-300">
                     Custom AI Instruction:
                   </label>

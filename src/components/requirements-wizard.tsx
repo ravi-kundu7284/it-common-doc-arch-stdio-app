@@ -43,6 +43,8 @@ import {
   Send,
   FolderKanban,
   FileCheck,
+  AlertTriangle,
+  Settings,
 } from "lucide-react";
 
 export const RequirementsWizard: React.FC = () => {
@@ -67,6 +69,11 @@ export const RequirementsWizard: React.FC = () => {
     SAMPLE_USER_PROMPTS[0].prompt
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<{
+    code?: string;
+    message: string;
+  } | null>(null);
+  const [isOfflineSimulation, setIsOfflineSimulation] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AiRequirementAnalysis | null>(
     currentProject.aiAnalysis || null
   );
@@ -149,19 +156,51 @@ export const RequirementsWizard: React.FC = () => {
         "Must be deployable across multi-availability zones\nZero downtime rolling deployments required"
       );
       setAiAnalysis(null);
+      setAnalysisError(null);
     }
   };
 
-  // Handle AI Analysis Execution
-  const handleRunAiAnalysis = () => {
+  // Handle AI Analysis Execution via OpenAI
+  const handleRunAiAnalysis = async (forceOffline = false) => {
     if (!naturalPrompt.trim()) return;
     setIsAnalyzing(true);
-    setTimeout(() => {
-      const result = analyzeRequirementText(naturalPrompt);
-      setAiAnalysis(result);
-      setSelectedDocs(result.selectedDocumentTypes);
+    setAnalysisError(null);
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promptType: "analyze_requirements",
+          prompt: naturalPrompt,
+          allowOfflineFallback: forceOffline,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setAnalysisError({
+          code: data.code || "AI_ERROR",
+          message: data.error || "Failed to analyze requirements with OpenAI.",
+        });
+        setIsAnalyzing(false);
+        return;
+      }
+
+      if (data.analysis) {
+        setAiAnalysis(data.analysis);
+        setSelectedDocs(data.analysis.selectedDocumentTypes || []);
+        setIsOfflineSimulation(Boolean(data.isOfflineSimulation));
+      }
+    } catch (err: any) {
+      setAnalysisError({
+        code: "NETWORK_ERROR",
+        message: err?.message || "Failed to communicate with architecture generation service.",
+      });
+    } finally {
       setIsAnalyzing(false);
-    }, 700);
+    }
   };
 
   // Toggle Document Type in Checklist
@@ -312,6 +351,56 @@ export const RequirementsWizard: React.FC = () => {
           ========================================================================= */}
       {intakeMode === "ai-prompt" && (
         <div className="space-y-6 animate-in fade-in">
+          {/* Actionable Error Banner */}
+          {analysisError && (
+            <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-950/30 text-amber-200 text-xs shadow-xl animate-in fade-in">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-amber-300 text-sm">
+                      {analysisError.code === "MISSING_API_KEY"
+                        ? "OpenAI API Key Required"
+                        : analysisError.code === "INVALID_API_KEY"
+                        ? "Invalid OpenAI Credentials"
+                        : "AI Architecture Generation Notice"}
+                    </h4>
+                    <p className="text-amber-200/90 text-xs mt-1 leading-relaxed">
+                      {analysisError.message}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto pt-2 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const settingsBtn = document.querySelector('[data-testid="settings-btn"]') as HTMLElement;
+                      if (settingsBtn) {
+                        settingsBtn.click();
+                      } else {
+                        alert("Please configure OPENAI_API_KEY in your server environment (.env.local) or click the gear icon in the top header.");
+                      }
+                    }}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/20 border border-amber-400/40 hover:bg-amber-500 hover:text-black font-bold text-xs text-amber-300 transition shadow"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Open Settings</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRunAiAnalysis(true)}
+                    className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition"
+                    title="Synthesize architecture using built-in deterministic templates without an external API key"
+                  >
+                    Use Offline Mode
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Step 1: Prompt Input Card */}
           <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
@@ -376,14 +465,14 @@ export const RequirementsWizard: React.FC = () => {
             <div className="pt-2 flex justify-end">
               <button
                 type="button"
-                onClick={handleRunAiAnalysis}
+                onClick={() => handleRunAiAnalysis(false)}
                 disabled={isAnalyzing || !naturalPrompt.trim()}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-indigo-600/30"
               >
                 {isAnalyzing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Analyzing Architectural Blueprint...</span>
+                    <span>Analyzing Architectural Blueprint with OpenAI...</span>
                   </>
                 ) : (
                   <>
@@ -402,9 +491,22 @@ export const RequirementsWizard: React.FC = () => {
               <div className="p-6 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-900/40">
                   <div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-700/60 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
-                      Synthesized Blueprint
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-700/60 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
+                        Synthesized Blueprint
+                      </span>
+                      {isOfflineSimulation ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-900/40 border border-amber-600/50 text-amber-300 text-[10px] font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
+                          <span>Offline Mode</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-900/50 border border-emerald-600/50 text-emerald-300 text-[10px] font-medium flex items-center gap-1">
+                          <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+                          <span>OpenAI GPT-4o</span>
+                        </span>
+                      )}
+                    </div>
                     <h3 className="text-lg font-bold text-white mt-1">{aiAnalysis.projectName}</h3>
                     <p className="text-xs text-slate-400">Domain: {aiAnalysis.domain}</p>
                   </div>
@@ -625,7 +727,7 @@ export const RequirementsWizard: React.FC = () => {
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
                     type="button"
-                    onClick={handleRunAiAnalysis}
+                    onClick={() => handleRunAiAnalysis(false)}
                     className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
                   >
                     Regenerate Analysis

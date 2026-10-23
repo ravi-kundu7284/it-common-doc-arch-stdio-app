@@ -32,15 +32,68 @@ export const QualityAuditView: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<"all" | FindingCategory>("all");
   const [patchSuccessId, setPatchSuccessId] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [auditNotice, setAuditNotice] = useState<string | null>(null);
 
-  const handleRunAudit = () => {
+  const handleRunAudit = async () => {
     setIsAuditing(true);
-    setTimeout(() => {
-      const result = auditProjectArchitecture(currentProject);
-      setActiveAudit(result);
-      setLatestAudit(result);
+    setAuditNotice(null);
+
+    // 1. Compute deterministic enterprise rule audit
+    const baseResult = auditProjectArchitecture(currentProject);
+
+    try {
+      // 2. Query OpenAI Architecture & Threat Audit
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promptType: "audit_architecture",
+          projectData: currentProject,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && Array.isArray(data.findings) && data.findings.length > 0) {
+        // Merge AI findings with deterministic findings
+        const combinedFindings = [...baseResult.findings, ...data.findings];
+        const criticalCount = combinedFindings.filter((f) => f.severity === "critical").length;
+        const highCount = combinedFindings.filter((f) => f.severity === "high").length;
+        const mediumCount = combinedFindings.filter((f) => f.severity === "medium").length;
+        const lowCount = combinedFindings.filter((f) => f.severity === "low").length;
+        const calculatedScore = Math.max(30, 100 - (criticalCount * 12 + highCount * 6 + mediumCount * 3 + lowCount * 1));
+
+        const mergedAudit: ArchitectureAuditResult = {
+          id: `audit_${Date.now()}`,
+          projectId: currentProject.id,
+          overallScore: calculatedScore,
+          summary: {
+            critical: criticalCount,
+            high: highCount,
+            medium: mediumCount,
+            low: lowCount,
+            fixed: 0,
+          },
+          findings: combinedFindings,
+          evaluatedAt: new Date().toISOString(),
+        };
+
+        setActiveAudit(mergedAudit);
+        setLatestAudit(mergedAudit);
+        setAuditNotice(`Enhanced with ${data.findings.length} findings from OpenAI ARB Threat Review`);
+      } else {
+        setActiveAudit(baseResult);
+        setLatestAudit(baseResult);
+        if (data.code === "MISSING_API_KEY") {
+          setAuditNotice("Audited with deterministic enterprise rules. (Configure OpenAI API key in Settings to activate AI Threat Audit).");
+        }
+      }
+    } catch (e) {
+      console.warn("AI audit fell back to deterministic rules:", e);
+      setActiveAudit(baseResult);
+      setLatestAudit(baseResult);
+    } finally {
       setIsAuditing(false);
-    }, 400);
+    }
   };
 
   const handleUpdateFindingStatus = (findingId: string, status: FindingStatus) => {
@@ -119,6 +172,23 @@ export const QualityAuditView: React.FC = () => {
       {/* Main Studio View */}
       <div className="flex-1 overflow-y-auto p-6 bg-[#070b14]">
         <div className="max-w-6xl mx-auto space-y-6">
+          {/* Audit Notice / Status */}
+          {auditNotice && (
+            <div className="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between text-xs text-indigo-300 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>{auditNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditNotice(null)}
+                className="text-slate-400 hover:text-white text-base leading-none"
+              >
+                &times;
+              </button>
+            </div>
+          )}
+
           {/* Top Score & Summary Metrics Bar */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Health Score Card */}
