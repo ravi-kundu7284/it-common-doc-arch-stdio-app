@@ -1,4 +1,10 @@
-﻿import { DesignDocProject, DocumentSection, DesignLevel } from "@/types";
+import {
+  DesignDocProject,
+  DocumentSection,
+  DesignLevel,
+  DocumentType,
+  DocumentItem,
+} from "@/types";
 
 /**
  * Replace occurrences of a previous title or domain across all document sections.
@@ -846,3 +852,698 @@ export function generateStandardDocument(
   }
   return generateHldDocument(projectData);
 }
+
+/**
+ * -----------------------------------------------------------------------------
+ * 5. SPECIALIZED ENTERPRISE DOCUMENT GENERATORS
+ * -----------------------------------------------------------------------------
+ */
+
+export function generateOverviewDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { domain, targetScale, functionalRequirements, nonFunctionalRequirements } = requirements;
+
+  return [
+    {
+      id: "overview-exec",
+      title: "1. Executive Summary & Problem Statement",
+      level: "common",
+      phase: "Phase 1: Project Charter",
+      contentMarkdown: `## 1. Executive Summary & Problem Statement
+
+### 1.1 Business Context
+The **${title}** initiative establishes a modern, high-resilience architecture for the **${domain}** domain.
+Operating at a target peak throughput of **${targetScale.rps.toLocaleString()} RPS** across **${targetScale.users}**, the system modernizes existing operational paradigms to deliver high reliability, automated governance, and superior user experience.
+
+### 1.2 Core Problem Statement
+Traditional architectures in the ${domain} space suffer from tight coupling, opaque state transitions, scalability bottlenecks during peak load spikes, and disproportionately high maintenance costs. **${title}** solves these challenges by implementing a decoupled, observable, and standards-compliant architectural foundation.
+`,
+    },
+    {
+      id: "overview-scope",
+      title: "2. Strategic Objectives & Scope Boundaries",
+      level: "common",
+      phase: "Phase 1: Project Charter",
+      contentMarkdown: `## 2. Strategic Objectives & Scope Boundaries
+
+### 2.1 Strategic Key Performance Indicators (KPIs)
+- **High Availability:** Maintain service availability of **${nonFunctionalRequirements.availability}**.
+- **Low-Latency Guarantees:** Deliver p95 API response times under **${nonFunctionalRequirements.latency}**.
+- **Security & Governance:** Full compliance with **${nonFunctionalRequirements.compliance.join(", ") || "Standard Enterprise SecOps"}**.
+- **Data Durability:** Enforce a strict data retention and audit window of **${targetScale.dataRetention}**.
+
+### 2.2 In-Scope Workstream Deliverables
+${functionalRequirements.map((f, i) => `- **[P1 Deliverable]** ${f}`).join("\n")}
+- Cloud-native auto-scaling deployment on **${recommendations.stack.devops}**.
+- Centralized distributed tracing, metrics, and audit logging.
+
+### 2.3 Non-Goals (Out of Scope for Initial Milestone)
+- Legacy hardware-based appliance maintenance.
+- Cross-cloud multi-master active-active write synchronizations prior to regional cutover.
+`,
+    },
+  ];
+}
+
+export function generateBrdDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { domain, functionalRequirements } = requirements;
+
+  return [
+    {
+      id: "brd-context",
+      title: "1. Business Context & Stakeholder Analysis",
+      level: "common",
+      phase: "Business Requirements",
+      contentMarkdown: `## 1. Business Context & Stakeholder Analysis
+
+### 1.1 Business Opportunity
+The market demand in **${domain}** requires rapid turnaround, zero-trust verification, and predictable operational costs. **${title}** creates direct stakeholder value by automating workflows, eliminating manual approval delays, and providing real-time visibility.
+
+### 1.2 Stakeholder Value Matrix
+| Stakeholder Group | Primary Objective | Business Value Delivered |
+| :--- | :--- | :--- |
+| **End Users / Customers** | Low-friction interaction & instant feedback | Sub-second latency, accessible UI, and transparent status. |
+| **Operations & Admins** | Efficient management & fraud control | Automated verification queues, audit trails, and dispute resolution. |
+| **Engineering / DevOps** | Maintainability & cost predictability | Standardized **${recommendations.selectedPattern}** pattern on **${recommendations.stack.backend}**. |
+| **Executive Leadership** | SLA compliance & ROI | Predictable infrastructure costs and scalable growth. |
+`,
+    },
+    {
+      id: "brd-process",
+      title: "2. Business Process & Core Workflow",
+      level: "common",
+      phase: "Business Requirements",
+      contentMarkdown: `## 2. Business Process & Core Workflow
+
+\`\`\`mermaid
+flowchart TD
+    Start(["Business Trigger / Client Request"]) --> Validate{"Initial Verification"}
+    Validate -->|"Passed"| Process["Process Domain Transaction"]
+    Validate -->|"Failed"| Reject["Notify Rejection & Log"]
+    Process --> Ledger["Record Audit & State Mutation"]
+    Ledger --> Notify["Dispatch Notifications (Push / Email / SMS)"]
+    Notify --> Finish(["Transaction Fulfilled"])
+\`\`\`
+
+### 2.3 Core Business Rules
+${functionalRequirements.map((f, idx) => `1. **Rule BR-${100 + idx + 1}:** ${f}`).join("\n")}
+`,
+    },
+  ];
+}
+
+export function generateSrsDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { functionalRequirements, nonFunctionalRequirements, targetScale } = requirements;
+
+  return [
+    {
+      id: "srs-functional",
+      title: "1. Functional Requirements & User Stories",
+      level: "common",
+      phase: "SRS",
+      contentMarkdown: `## 1. Functional Requirements & User Stories
+
+### 1.1 Functional Specification Matrix
+| Req ID | Requirement Title | User Story | Priority |
+| :--- | :--- | :--- | :--- |
+${functionalRequirements
+  .map(
+    (f, idx) =>
+      `| **FR-${String(idx + 1).padStart(3, "0")}** | ${f.slice(0, 30)}... | As a verified user, I must be able to ${f.toLowerCase()}, so that business operations proceed securely. | High |`
+  )
+  .join("\n")}
+`,
+    },
+    {
+      id: "srs-nfr",
+      title: "2. Non-Functional Quantitative SLAs",
+      level: "common",
+      phase: "SRS",
+      contentMarkdown: `## 2. Non-Functional Quantitative SLAs
+
+### 2.1 Performance & Scalability
+- **Peak Concurrency:** **${targetScale.rps} RPS** sustained throughput.
+- **Latency SLA:** **${nonFunctionalRequirements.latency}** for 95th percentile requests.
+- **Service Availability:** **${nonFunctionalRequirements.availability}** uptime SLA (equating to < 4.38 hours downtime/year).
+
+### 2.2 Security & Compliance Mandates
+- **Compliance Standards:** ${nonFunctionalRequirements.compliance.join(", ") || "ISO 27001, SOC2 Type II"}.
+- **Transport Security:** Strict TLS 1.3 encryption with HTTP Strict Transport Security (HSTS).
+- **Data at Rest:** Transparent Database Encryption using AES-256 keys managed by Cloud KMS.
+`,
+    },
+  ];
+}
+
+export function generateSadDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { selectedPattern, stack } = recommendations;
+
+  return [
+    {
+      id: "sad-blueprint",
+      title: "1. Holistic Solution Blueprint",
+      level: "hld",
+      phase: "Solution Architecture",
+      contentMarkdown: `## 1. Holistic Solution Blueprint
+
+The **${title}** solution implements a **${selectedPattern}** architecture designed for durability, modular maintenance, and cloud elasticity.
+
+\`\`\`mermaid
+flowchart TD
+    Client["Client Clients<br/>[Web / Mobile PWA]"]
+    WAF["Cloud Edge & WAF<br/>[DDoS Shield, TLS 1.3]"]
+    App["Application Tier<br/>[${stack.backend}]"]
+    Cache["Caching Layer<br/>[${stack.caching}]"]
+    DB[("Primary Database<br/>[${stack.database}]")]
+    Queue["Asynchronous Broker<br/>[${stack.messaging}]"]
+
+    Client -->|"HTTPS / REST"| WAF
+    WAF -->|"Reverse Proxy"| App
+    App <-->|"Session & Hot Lookups"| Cache
+    App <-->|"ACID Transactions"| DB
+    App -->|"Emit Events / Jobs"| Queue
+\`\`\`
+`,
+    },
+    {
+      id: "sad-matrix",
+      title: "2. Technology Evaluation & Standards Matrix",
+      level: "hld",
+      phase: "Solution Architecture",
+      contentMarkdown: `## 2. Technology Evaluation & Standards Matrix
+
+| Architectural Layer | Chosen Technology | Justification |
+| :--- | :--- | :--- |
+| **Frontend Tier** | ${stack.frontend} | Server-Side Rendering (SSR) for fast First Contentful Paint, TypeScript type safety. |
+| **Backend Tier** | ${stack.backend} | High I/O concurrency, rich ecosystem, and modular package boundaries. |
+| **Data Tier** | ${stack.database} | ACID transactional guarantees, JSONB semi-structured capability, robust replication. |
+| **Caching Layer** | ${stack.caching} | Sub-millisecond latency for session validation and rate limit tracking. |
+| **Messaging Layer** | ${stack.messaging} | Guaranteed message delivery, decoupled asynchronous task processing. |
+| **Infrastructure / DevOps** | ${stack.devops} | Immutable container packaging and automated infrastructure-as-code deployments. |
+`,
+    },
+  ];
+}
+
+export function generateDatabaseDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+
+  return [
+    {
+      id: "db-erd",
+      title: "1. Entity-Relationship Data Model",
+      level: "lld",
+      phase: "Database Architecture",
+      contentMarkdown: `## 1. Entity-Relationship Data Model
+
+\`\`\`mermaid
+erDiagram
+    USERS ||--o{ TRANSACTIONS : initiates
+    USERS ||--o{ AUDIT_LOGS : generates
+    USERS {
+        uuid id PK
+        string email UK
+        string full_name
+        string role
+        string status
+        timestamptz created_at
+    }
+    TRANSACTIONS ||--o{ TRANSACTION_EVENTS : tracks
+    TRANSACTIONS {
+        uuid id PK
+        uuid user_id FK
+        string idempotency_key UK
+        numeric amount
+        string currency
+        string status
+        timestamptz created_at
+    }
+    TRANSACTION_EVENTS {
+        uuid id PK
+        uuid transaction_id FK
+        string event_type
+        jsonb payload
+        timestamptz timestamp
+    }
+\`\`\`
+`,
+    },
+    {
+      id: "db-ddl",
+      title: "2. Relational DDL Specifications & Indexing Strategy",
+      level: "lld",
+      phase: "Database Architecture",
+      contentMarkdown: `## 2. Relational DDL Specifications & Indexing Strategy
+
+\`\`\`sql
+-- Schema DDL for ${title} Core Data Entities
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    role VARCHAR(50) DEFAULT 'member',
+    status VARCHAR(50) DEFAULT 'pending_verification',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    idempotency_key VARCHAR(128) UNIQUE NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'USD',
+    status VARCHAR(50) DEFAULT 'initiated',
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Performance Optimization Indexes
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_status ON transactions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
+\`\`\`
+
+### 2.3 Backup & Point-in-Time Recovery (PITR) Policy
+- **Automated Snapshots:** Nightly full volume backups retained for 35 days.
+- **Write-Ahead Log (WAL) Archiving:** Continuous streaming WAL archiving to Cloud Storage, guaranteeing an RPO < 5 minutes.
+`,
+    },
+  ];
+}
+
+export function generateApiDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata } = projectData;
+  const title = metadata?.title || "System Architecture";
+
+  return [
+    {
+      id: "api-standards",
+      title: "1. API Architecture Principles & Standards",
+      level: "lld",
+      phase: "API Design",
+      contentMarkdown: `## 1. API Architecture Principles & Standards
+
+### 1.1 Design Standards
+- **RESTful Conventions:** Standard HTTP semantics (\`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, \`DELETE\`).
+- **Base URI:** \`https://api.${title.toLowerCase().replace(/[^a-z0-9]/g, "")}.com/v1\`
+- **Authentication:** Bearer JWT in the \`Authorization: Bearer <token>\` header.
+- **Idempotency:** All mutating requests require an \`Idempotency-Key: <UUID>\` header.
+- **Pagination:** Standard cursor-based pagination (\`?cursor=<token>&limit=50\`).
+
+### 1.2 Unified JSON Response Envelope
+\`\`\`json
+{
+  "success": true,
+  "data": {},
+  "meta": {
+    "requestId": "req_84f932847a",
+    "timestamp": "2026-10-23T12:00:00Z"
+  }
+}
+\`\`\`
+`,
+    },
+    {
+      id: "api-endpoints",
+      title: "2. Core API Endpoints Specification",
+      level: "lld",
+      phase: "API Design",
+      contentMarkdown: `## 2. Core API Endpoints Specification
+
+| Method | Endpoint Path | Description | Auth Required | Rate Limit |
+| :--- | :--- | :--- | :--- | :--- |
+| \`POST\` | \`/api/v1/auth/register\` | Register new user / request verification | No | 10 req/min |
+| \`POST\` | \`/api/v1/auth/login\` | Authenticate user and issue JWT session | No | 15 req/min |
+| \`GET\` | \`/api/v1/resources\` | Paginated listing of domain items | Yes | 300 req/min |
+| \`POST\` | \`/api/v1/resources\` | Create new resource (idempotent) | Yes | 60 req/min |
+| \`GET\` | \`/api/v1/resources/:id\` | Fetch resource details by UUID | Yes | 600 req/min |
+| \`PATCH\` | \`/api/v1/resources/:id\` | Update mutable resource properties | Yes | 60 req/min |
+| \`POST\` | \`/api/v1/checkout\` | Initiate checkout transaction | Yes | 30 req/min |
+`,
+    },
+  ];
+}
+
+export function generateSecurityDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { nonFunctionalRequirements } = requirements;
+
+  return [
+    {
+      id: "sec-stride",
+      title: "1. STRIDE Threat Model & Attack Surface",
+      level: "common",
+      phase: "Security Architecture",
+      contentMarkdown: `## 1. STRIDE Threat Model & Attack Surface
+
+| STRIDE Category | Threat Vector | Implemented Mitigation |
+| :--- | :--- | :--- |
+| **Spoofing** | Forged client credentials or session hijacking | Ephemeral JWT with RS256 asymmetric signing, short TTL (15 mins), and refresh rotation. |
+| **Tampering** | In-flight payload manipulation | Strict TLS 1.3, cryptographic HMAC signatures on webhooks, and DB audit hashing. |
+| **Repudiation** | Denying completed transactions | Tamper-evident append-only audit trail recording actor IP, timestamp, and action. |
+| **Information Disclosure** | Data leakage in logs or error stack traces | Strict sanitization of PII/credentials, column-level DB encryption, and generic errors. |
+| **Denial of Service** | Volumetric layer 7 HTTP flood attacks | Cloudflare WAF, Redis sliding-window rate limiters, and auto-scaling pods. |
+| **Elevation of Privilege** | Horizontal privilege escalation (IDOR) | Strict Row-Level Security (RLS) policies and policy-based authorization (ABAC). |
+`,
+    },
+    {
+      id: "sec-crypto",
+      title: "2. Cryptographic Governance & Compliance",
+      level: "common",
+      phase: "Security Architecture",
+      contentMarkdown: `## 2. Cryptographic Governance & Compliance
+
+### 2.1 Encryption Standards
+- **Data in Transit:** TLS 1.3 enforced on all ingress endpoints with forward secrecy cipher suites.
+- **Data at Rest:** Database volumes and Cloud Storage buckets encrypted using AES-256-GCM via Cloud KMS.
+- **Secrets Management:** Zero plaintext secrets in code or configuration. Managed through HashiCorp Vault or Cloud Secret Manager with automatic 90-day rotation.
+
+### 2.2 Compliance Verification
+Adherence to **${nonFunctionalRequirements.compliance.join(", ") || "SOC2 Type II, ISO 27001"}**. Annual third-party penetration testing and quarterly vulnerability scans.
+`,
+    },
+  ];
+}
+
+export function generateDeploymentDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { stack } = recommendations;
+
+  return [
+    {
+      id: "deploy-topology",
+      title: "1. Multi-AZ Cloud Infrastructure Topology",
+      level: "hld",
+      phase: "Deployment Architecture",
+      contentMarkdown: `## 1. Multi-AZ Cloud Infrastructure Topology
+
+\`\`\`mermaid
+graph TD
+    User["End Users / Mobile App"] --> CDN["Cloud Edge CDN & WAF"]
+    CDN --> LB["Application Load Balancer"]
+    
+    subgraph VPC ["Production VPC (10.0.0.0/16)"]
+        subgraph AZ1 ["Availability Zone 1"]
+            App1["App Container Replica 1"]
+            DB_Primary[("Primary DB (Writer)")]
+        end
+        subgraph AZ2 ["Availability Zone 2"]
+            App2["App Container Replica 2"]
+            DB_Standby[("Standby DB (Sync Replica)")]
+        end
+    end
+
+    LB --> App1
+    LB --> App2
+    App1 --> DB_Primary
+    App2 --> DB_Primary
+    DB_Primary -.->|"Synchronous Replication"| DB_Standby
+\`\`\`
+`,
+    },
+    {
+      id: "deploy-specs",
+      title: "2. Capacity Sizing & Auto-Scaling Parameters",
+      level: "hld",
+      phase: "Deployment Architecture",
+      contentMarkdown: `## 2. Capacity Sizing & Auto-Scaling Parameters
+
+| Component | Minimum Replicas | Maximum Replicas | Scale-Out Metric |
+| :--- | :--- | :--- | :--- |
+| **Ingress Load Balancer** | 2 | 10 | Sustained HTTP request count > 2,000 req/sec |
+| **App Compute (${stack.backend})** | 2 | 20 | CPU utilization > 70% or Memory > 75% |
+| **Redis Cache Cluster** | 2 (Primary + Replica) | 6 nodes | Memory utilization > 80% |
+| **Database (${stack.database})** | 1 Writer, 1 Read Replica | 4 Read Replicas | Read IOPS or CPU > 75% |
+`,
+    },
+  ];
+}
+
+export function generateRunbookDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata } = projectData;
+  const title = metadata?.title || "System Architecture";
+
+  return [
+    {
+      id: "runbook-observability",
+      title: "1. Health Monitoring & Alerting Matrix",
+      level: "common",
+      phase: "Operations & Runbooks",
+      contentMarkdown: `## 1. Health Monitoring & Alerting Matrix
+
+### 1.1 Golden Signals & Alerting Thresholds
+| Metric | Healthy Baseline | Warning Alert | Critical PagerDuty Alert |
+| :--- | :--- | :--- | :--- |
+| **HTTP 5xx Error Rate** | < 0.05% | > 1.0% for 2 mins | > 5.0% for 1 min |
+| **p95 Latency** | < 150ms | > 400ms for 3 mins | > 1,000ms for 2 mins |
+| **Database CPU Usage** | < 45% | > 75% for 5 mins | > 90% for 3 mins |
+| **Disk Storage Capacity** | < 60% used | > 80% used | > 90% used |
+`,
+    },
+    {
+      id: "runbook-sop",
+      title: "2. Standard Operating Procedures (SOP)",
+      level: "common",
+      phase: "Operations & Runbooks",
+      contentMarkdown: `## 2. Standard Operating Procedures (SOP)
+
+### SOP-01: Application Service Emergency Rolling Restart
+1. Verify traffic is cleanly balanced across both availability zones.
+2. Trigger non-disruptive rolling restart via container orchestrator:
+   \`\`\`bash
+   kubectl rollout restart deployment/${title.toLowerCase().replace(/[^a-z0-9]/g, "")}-backend -n production
+   \`\`\`
+3. Monitor error rates in Datadog / Grafana dashboard for 5 minutes.
+
+### SOP-02: Relational Database Failover Drill
+1. Trigger managed failover to warm standby replica.
+2. Applications automatically reconnect via DNS endpoint within 30 seconds.
+3. Validate write availability with synthetic smoke test.
+`,
+    },
+  ];
+}
+
+export function generateRaidDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { constraints } = requirements;
+
+  return [
+    {
+      id: "raid-matrix",
+      title: "1. Risk, Assumptions, Issues, Dependencies (RAID) Register",
+      level: "common",
+      phase: "RAID Governance",
+      contentMarkdown: `## 1. Risk, Assumptions, Issues, Dependencies (RAID) Register
+
+### 1.1 Risk Register
+| Risk ID | Risk Description | Probability | Impact | Mitigation Strategy |
+| :--- | :--- | :--- | :--- | :--- |
+| **RSK-01** | Third-party payment gateway or webhook downtime | Medium | High | Exponential backoff retry queue with DLQ; fallback provider. |
+| **RSK-02** | Rapid surge in concurrency during promotional events | High | Medium | Horizontal Pod Autoscaling (HPA) with Redis edge caching. |
+| **RSK-03** | Unauthorized access or compromised resident credentials | Low | Critical | Multi-factor authentication, audit logs, and instant session revocation. |
+
+### 1.2 Documented Architectural Assumptions
+- High-speed internet connectivity available to all end clients.
+- Managed cloud database provides automatic daily snapshots and PITR.
+
+### 1.3 Project Constraints
+${constraints.map((c, i) => `- **[Constraint ${i + 1}]** ${c}`).join("\n")}
+`,
+    },
+  ];
+}
+
+export function generateRoadmapDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata } = projectData;
+  const title = metadata?.title || "System Architecture";
+
+  return [
+    {
+      id: "roadmap-timeline",
+      title: "1. Phased Architecture Delivery Roadmap",
+      level: "common",
+      phase: "Roadmap",
+      contentMarkdown: `## 1. Phased Architecture Delivery Roadmap
+
+\`\`\`mermaid
+flowchart LR
+    P1["Phase 1: Foundation (Weeks 1-4)<br/>Core Entities, Auth & DDL"]
+    P2["Phase 2: MVP Core (Weeks 5-8)<br/>Business Flows & Ingress API"]
+    P3["Phase 3: Hardening (Weeks 9-12)<br/>SecOps, Multi-AZ & Testing"]
+    P4["Phase 4: Scale (Weeks 13+)<br/>Advanced Analytics & SLA Drills"]
+
+    P1 --> P2 --> P3 --> P4
+\`\`\`
+
+### 1.1 Milestone Deliverables Breakdown
+- **Sprint 1 - 2:** Database DDL migrations, container base images, and OAuth2 identity provider integration.
+- **Sprint 3 - 4:** Core business transactional endpoints with idempotency keys and unit/integration test suites.
+- **Sprint 5 - 6:** UI Client integration, Webhook handling, and Redis rate-limiting filters.
+- **Sprint 7 - 8:** Production multi-AZ infrastructure provisioning, disaster recovery drills, and security sign-off.
+`,
+    },
+  ];
+}
+
+/**
+ * Dispatcher to generate sections for any requested DocumentType.
+ */
+export function generateDocumentByType(
+  type: DocumentType,
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  switch (type) {
+    case "overview":
+      return generateOverviewDocument(projectData);
+    case "brd":
+      return generateBrdDocument(projectData);
+    case "srs":
+      return generateSrsDocument(projectData);
+    case "hld":
+      return generateHldDocument(projectData);
+    case "lld":
+      return generateLldDocument(projectData);
+    case "sad":
+      return generateSadDocument(projectData);
+    case "database":
+      return generateDatabaseDocument(projectData);
+    case "api":
+      return generateApiDocument(projectData);
+    case "security":
+      return generateSecurityDocument(projectData);
+    case "deployment":
+      return generateDeploymentDocument(projectData);
+    case "runbook":
+      return generateRunbookDocument(projectData);
+    case "raid":
+      return generateRaidDocument(projectData);
+    case "roadmap":
+      return generateRoadmapDocument(projectData);
+    case "adrs":
+    case "integration":
+    case "cicd":
+    case "testing":
+    default:
+      return generateStandardDocument(projectData, "hld");
+  }
+}
+
+/**
+ * Generate full coordinated set of DocumentItem objects.
+ */
+export function generateFullDocumentSet(
+  projectData: Omit<DesignDocProject, "documentSections">,
+  selectedTypes?: DocumentType[]
+): DocumentItem[] {
+  const typesToGenerate: DocumentType[] =
+    selectedTypes && selectedTypes.length > 0
+      ? selectedTypes
+      : ["overview", "brd", "srs", "hld", "lld", "sad", "database", "api", "security", "deployment", "runbook", "raid", "roadmap"];
+
+  const now = new Date().toISOString();
+
+  return typesToGenerate.map((type) => {
+    const title = getDocumentTitle(type);
+    const sections = generateDocumentByType(type, projectData);
+
+    return {
+      id: `doc_${type}_${Math.random().toString(36).substring(2, 7)}`,
+      projectId: projectData.id,
+      type,
+      title,
+      status: "draft",
+      version: projectData.metadata.version || "1.0.0",
+      sections,
+      reviewComments: [
+        {
+          id: `cmt_${Math.random().toString(36).substring(2, 7)}`,
+          author: "DocArch AI Assistant",
+          role: "Architecture Governance Engine",
+          comment: `Initial draft generated automatically aligned with ${projectData.recommendations.selectedPattern} pattern.`,
+          createdAt: now,
+        },
+      ],
+      lastModifiedBy: "DocArch AI",
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+}
+
+export function getDocumentTitle(type: DocumentType): string {
+  switch (type) {
+    case "overview":
+      return "Project Overview & Scope";
+    case "brd":
+      return "Business Requirements Document (BRD)";
+    case "srs":
+      return "Software Requirements Specification (SRS)";
+    case "hld":
+      return "High-Level Design (HLD)";
+    case "lld":
+      return "Low-Level Design (LLD)";
+    case "sad":
+      return "Solution Architecture Document (SAD)";
+    case "adrs":
+      return "Architecture Decision Records (ADRs)";
+    case "database":
+      return "Database Design Document";
+    case "api":
+      return "API Specification Document";
+    case "integration":
+      return "Integration Design Document";
+    case "security":
+      return "Security Architecture & Threat Model";
+    case "deployment":
+      return "Deployment Architecture";
+    case "cicd":
+      return "CI/CD Pipeline Design";
+    case "testing":
+      return "Testing Strategy & Quality Plan";
+    case "runbook":
+      return "Operational Runbook & SRE Manual";
+    case "raid":
+      return "RAID Log (Risks, Assumptions, Issues, Dependencies)";
+    case "roadmap":
+      return "Implementation Roadmap & Milestones";
+    default:
+      return "Technical Architecture Document";
+  }
+}
+

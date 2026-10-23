@@ -1,11 +1,21 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { requirementsFormSchema, RequirementsFormData } from "@/types";
+import {
+  requirementsFormSchema,
+  RequirementsFormData,
+  AiRequirementAnalysis,
+  DocumentType,
+} from "@/types";
 import { useDocStore } from "@/store/use-doc-store";
 import { PRESET_TEMPLATES } from "@/lib/templates";
+import {
+  SAMPLE_USER_PROMPTS,
+  ALL_CORE_DOCUMENT_TYPES,
+  analyzeRequirementText,
+} from "@/lib/ai-analyzer";
 import {
   FileText,
   Sliders,
@@ -24,27 +34,16 @@ import {
   DollarSign,
   Users,
   Cpu,
+  HelpCircle,
+  CheckSquare,
+  Square,
+  RefreshCw,
+  Edit3,
+  Bot,
+  Send,
+  FolderKanban,
+  FileCheck,
 } from "lucide-react";
-
-const COMPLIANCE_OPTIONS = [
-  "PCI-DSS Level 1",
-  "SOC2 Type II",
-  "HIPAA Privacy & Security",
-  "GDPR & Data Protection",
-  "ISO 27001",
-  "FedRAMP",
-  "CCPA",
-  "HL7 FHIR v4",
-];
-
-const CLOUD_ENVIRONMENTS = [
-  "AWS (Amazon Web Services)",
-  "GCP (Google Cloud Platform)",
-  "Microsoft Azure",
-  "Multi-Cloud / Hybrid",
-  "On-Premise Private Cloud",
-  "Serverless & Edge (Cloudflare/Vercel/Fly.io)",
-];
 
 export const RequirementsWizard: React.FC = () => {
   const {
@@ -57,17 +56,39 @@ export const RequirementsWizard: React.FC = () => {
     startBlankProject,
     setDesignLevel,
     regenerateDocumentSections,
+    applyAiAnalysisToProject,
   } = useDocStore();
 
+  // Top level intake mode: "ai-prompt" or "structured-form"
+  const [intakeMode, setIntakeMode] = useState<"ai-prompt" | "structured-form">("ai-prompt");
+
+  // AI Prompt State
+  const [naturalPrompt, setNaturalPrompt] = useState(
+    SAMPLE_USER_PROMPTS[0].prompt
+  );
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AiRequirementAnalysis | null>(
+    currentProject.aiAnalysis || null
+  );
+
+  // Analysis Review State
+  const [editingReqId, setEditingReqId] = useState<string | null>(null);
+  const [newReqTitle, setNewReqTitle] = useState("");
+  const [newReqDesc, setNewReqDesc] = useState("");
+  const [isAddingReq, setIsAddingReq] = useState(false);
+  const [selectedDocs, setSelectedDocs] = useState<DocumentType[]>(
+    aiAnalysis?.selectedDocumentTypes ||
+      ALL_CORE_DOCUMENT_TYPES.filter((d) => d.isRecommendedDefault).map((d) => d.type)
+  );
+
+  // Structured form state
   const [selectedLevel, setSelectedLevel] = useState<"hld" | "lld" | "full">(
     currentProject.designLevel || "hld"
   );
-
   const [stepIndex, setStepIndex] = useState(1);
   const [selectedCompliance, setSelectedCompliance] = useState<string[]>(
     currentProject.requirements.nonFunctionalRequirements.compliance || []
   );
-
   const [functionalList, setFunctionalList] = useState<string[]>(
     currentProject.requirements.functionalRequirements.length > 0
       ? currentProject.requirements.functionalRequirements
@@ -77,7 +98,6 @@ export const RequirementsWizard: React.FC = () => {
           "Real-time event streaming and push notifications",
         ]
   );
-
   const [newFeatureText, setNewFeatureText] = useState("");
 
   const {
@@ -98,74 +118,108 @@ export const RequirementsWizard: React.FC = () => {
       functionalRequirements: functionalList.join("\n"),
       latency: currentProject.requirements.nonFunctionalRequirements.latency,
       availability: currentProject.requirements.nonFunctionalRequirements.availability,
-      compliance: selectedCompliance,
+      compliance: currentProject.requirements.nonFunctionalRequirements.compliance,
       constraints: currentProject.requirements.constraints.join("\n"),
     },
   });
 
-  // Synchronize design level selection from Navbar or external triggers (vice-versa sync)
-  useEffect(() => {
-    if (currentProject.designLevel && currentProject.designLevel !== selectedLevel) {
-      setSelectedLevel(currentProject.designLevel);
-    }
-  }, [currentProject.designLevel]);
-
-  // Synchronize form fields when project changes
-  useEffect(() => {
-    setValue("title", currentProject.metadata.title);
-    setValue("domain", currentProject.requirements.domain);
-    setValue("rps", currentProject.requirements.targetScale.rps);
-    setValue("users", currentProject.requirements.targetScale.users);
-    setValue("dataRetention", currentProject.requirements.targetScale.dataRetention);
-    setValue("latency", currentProject.requirements.nonFunctionalRequirements.latency);
-    setValue("availability", currentProject.requirements.nonFunctionalRequirements.availability);
-    setSelectedCompliance(currentProject.requirements.nonFunctionalRequirements.compliance || []);
-    setFunctionalList(currentProject.requirements.functionalRequirements || []);
-  }, [currentProject.id, currentProject.metadata.title]);
-
-  const toggleCompliance = (item: string) => {
-    const next = selectedCompliance.includes(item)
-      ? selectedCompliance.filter((c) => c !== item)
-      : [...selectedCompliance, item];
-    setSelectedCompliance(next);
-    setValue("compliance", next);
-  };
-
-  const handleAddFeature = () => {
-    if (!newFeatureText.trim()) return;
-    const next = [...functionalList, newFeatureText.trim()];
-    setFunctionalList(next);
-    setValue("functionalRequirements", next.join("\n"));
-    setNewFeatureText("");
-  };
-
-  const handleRemoveFeature = (idx: number) => {
-    const next = functionalList.filter((_, i) => i !== idx);
-    setFunctionalList(next);
-    setValue("functionalRequirements", next.join("\n"));
-  };
-
   const handleStartBlank = () => {
-    startBlankProject("Custom Architecture Project", "Enterprise Software", selectedLevel);
-    setValue("title", "Custom Architecture Project");
-    setValue("domain", "Enterprise Software");
-    setValue("rps", 5000);
-    setValue("users", "1,000,000 MAU");
-    setValue("dataRetention", "3 Years");
-    setValue("latency", "p99 < 150ms");
-    setValue("availability", "99.95%");
-    setSelectedCompliance(["SOC2 Type II", "ISO 27001"]);
-    setValue("compliance", ["SOC2 Type II", "ISO 27001"]);
-    const blankFeatures = [
-      "Secure client authentication and access control",
-      "Core domain transactional processing with idempotency",
-    ];
-    setFunctionalList(blankFeatures);
-    setValue("functionalRequirements", blankFeatures.join("\n"));
-    setValue("constraints", "Zero single points of failure");
+    if (confirm("Reset current project to a blank canvas? Unsaved changes will be cleared.")) {
+      startBlankProject();
+      setValue("title", "New Technical Architecture");
+      setValue("domain", "Cloud Distributed Services");
+      setValue("rps", 5000);
+      setValue("users", "1,000,000 MAU");
+      setValue("dataRetention", "3 Years");
+      setValue("latency", "p99 < 150ms");
+      setValue("availability", "99.95%");
+      setSelectedCompliance(["SOC2 Type II", "ISO 27001"]);
+      setValue("compliance", ["SOC2 Type II", "ISO 27001"]);
+      setFunctionalList([
+        "Secure client authentication and session authorization",
+        "Domain-specific transactional processing with idempotency guarantees",
+        "High-performance read queries and asynchronous reporting",
+      ]);
+      setValue(
+        "functionalRequirements",
+        "Secure client authentication and session authorization\nDomain-specific transactional processing with idempotency guarantees\nHigh-performance read queries and asynchronous reporting"
+      );
+      setValue(
+        "constraints",
+        "Must be deployable across multi-availability zones\nZero downtime rolling deployments required"
+      );
+      setAiAnalysis(null);
+    }
   };
 
-  const onSubmit = (data: RequirementsFormData) => {
+  // Handle AI Analysis Execution
+  const handleRunAiAnalysis = () => {
+    if (!naturalPrompt.trim()) return;
+    setIsAnalyzing(true);
+    setTimeout(() => {
+      const result = analyzeRequirementText(naturalPrompt);
+      setAiAnalysis(result);
+      setSelectedDocs(result.selectedDocumentTypes);
+      setIsAnalyzing(false);
+    }, 700);
+  };
+
+  // Toggle Document Type in Checklist
+  const toggleDocType = (type: DocumentType) => {
+    if (selectedDocs.includes(type)) {
+      setSelectedDocs(selectedDocs.filter((t) => t !== type));
+    } else {
+      setSelectedDocs([...selectedDocs, type]);
+    }
+  };
+
+  const handleSelectAllDocs = () => {
+    setSelectedDocs(ALL_CORE_DOCUMENT_TYPES.map((d) => d.type));
+  };
+
+  const handleSelectRecommendedDocs = () => {
+    setSelectedDocs(ALL_CORE_DOCUMENT_TYPES.filter((d) => d.isRecommendedDefault).map((d) => d.type));
+  };
+
+  // Add / Remove Requirement in Analysis
+  const handleAddRequirement = () => {
+    if (!newReqTitle.trim() || !aiAnalysis) return;
+    const newReq = {
+      id: `FR-${String(aiAnalysis.functionalRequirements.length + 1).padStart(3, "0")}`,
+      title: newReqTitle.trim(),
+      description: newReqDesc.trim() || newReqTitle.trim(),
+      priority: "high" as const,
+    };
+    setAiAnalysis({
+      ...aiAnalysis,
+      functionalRequirements: [...aiAnalysis.functionalRequirements, newReq],
+    });
+    setNewReqTitle("");
+    setNewReqDesc("");
+    setIsAddingReq(false);
+  };
+
+  const handleDeleteRequirement = (reqId: string) => {
+    if (!aiAnalysis) return;
+    setAiAnalysis({
+      ...aiAnalysis,
+      functionalRequirements: aiAnalysis.functionalRequirements.filter((r) => r.id !== reqId),
+    });
+  };
+
+  // Approve & Generate Documents
+  const handleApproveAndGenerate = () => {
+    if (!aiAnalysis) return;
+    const finalAnalysis: AiRequirementAnalysis = {
+      ...aiAnalysis,
+      selectedDocumentTypes: selectedDocs,
+    };
+    applyAiAnalysisToProject(finalAnalysis);
+    setActiveTab("studio");
+  };
+
+  // Structured Submit
+  const onSubmitStructured = (data: RequirementsFormData) => {
     updateMetadata({
       title: data.title,
     });
@@ -189,564 +243,639 @@ export const RequirementsWizard: React.FC = () => {
 
     setDesignLevel(selectedLevel);
     regenerateDocumentSections(selectedLevel);
-
     setActiveStep(2);
     setActiveTab("recommender");
   };
 
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 pb-24 md:pb-8">
-      {/* Hero Banner & Presets Bar */}
-      <div className="mb-6">
-        <div className="pb-6 border-b border-slate-800 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Module A &bull; Guided Requirements Intake</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Design Requirements Intake Wizard
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                Standardize your system design parameters to eliminate ambiguity before architectural synthesis.
-              </p>
+      {/* Header Banner & Mode Tabs */}
+      <div className="mb-6 pb-6 border-b border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Module A &bull; Guided Requirements Intake</span>
             </div>
-
-            <button
-              type="button"
-              onClick={handleStartBlank}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white text-indigo-300 transition shadow shrink-0 self-start sm:self-center"
-              title="Start with a blank project without any demo data"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Blank Architecture</span>
-            </button>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Design Requirements Intake Studio
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Synthesize architecture documents from natural-language briefs or structured parameters.
+            </p>
           </div>
 
-          {/* Quick preset selector pills */}
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
-            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 shrink-0">
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              <span>Industry Presets:</span>
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PRESET_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  type="button"
-                  onClick={() => {
-                    loadPresetTemplate(tpl.id, selectedLevel);
-                    setValue("title", tpl.title);
-                    setValue("domain", tpl.requirements.domain);
-                    setValue("rps", tpl.requirements.targetScale.rps);
-                    setValue("users", tpl.requirements.targetScale.users);
-                    setValue("dataRetention", tpl.requirements.targetScale.dataRetention);
-                    setValue("latency", tpl.requirements.nonFunctionalRequirements.latency);
-                    setValue("availability", tpl.requirements.nonFunctionalRequirements.availability);
-                    setSelectedCompliance(tpl.requirements.nonFunctionalRequirements.compliance);
-                    setValue("compliance", tpl.requirements.nonFunctionalRequirements.compliance);
-                    setFunctionalList(tpl.requirements.functionalRequirements);
-                    setValue("functionalRequirements", tpl.requirements.functionalRequirements.join("\n"));
-                    setValue("constraints", tpl.requirements.constraints.join("\n"));
-                  }}
-                  className="px-3 py-1 rounded-lg text-xs font-medium bg-slate-900 border border-slate-800 hover:border-indigo-500/60 hover:text-indigo-200 text-slate-300 transition flex items-center gap-1.5"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                  <span>{tpl.domain}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={handleStartBlank}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600/20 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white text-indigo-300 transition shadow shrink-0 self-start sm:self-center"
+            title="Start with a blank project without any demo data"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Blank Architecture</span>
+          </button>
         </div>
 
-        {/* DESIGN LEVEL SELECTION (HLD vs LLD vs Full) */}
-        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-4">
-            <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-indigo-400" />
-              <span>Select Architecture Design Level</span>
-            </span>
-            <span className="text-[11px] text-slate-400">Content and sections adapt to this selection</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        {/* Mode Toggle Switcher */}
+        <div className="flex items-center gap-2 pt-2">
+          <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
             <button
               type="button"
-              onClick={() => {
-                setSelectedLevel("hld");
-                setDesignLevel("hld");
-              }}
-              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
-                selectedLevel === "hld"
-                  ? "border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500/50 shadow-lg shadow-emerald-950/30"
-                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+              onClick={() => setIntakeMode("ai-prompt")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                intakeMode === "ai-prompt"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 rounded bg-emerald-950 border border-emerald-800 text-emerald-400">
-                      <Layers className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-bold text-xs text-emerald-300">High-Level Design (HLD)</span>
-                  </div>
-                  {selectedLevel === "hld" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  System Context, C4 Containers, Microservices, Multi-Region Topology, Security & DR SLAs.
-                </p>
-              </div>
+              <Bot className="w-3.5 h-3.5" />
+              <span>AI Natural Language Prompt</span>
             </button>
-
             <button
               type="button"
-              onClick={() => {
-                setSelectedLevel("lld");
-                setDesignLevel("lld");
-              }}
-              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
-                selectedLevel === "lld"
-                  ? "border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-950/30"
-                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+              onClick={() => setIntakeMode("structured-form")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                intakeMode === "structured-form"
+                  ? "bg-indigo-600 text-white shadow"
+                  : "text-slate-400 hover:text-slate-200"
               }`}
             >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 rounded bg-indigo-950 border border-indigo-800 text-indigo-400">
-                      <Cpu className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-bold text-xs text-indigo-300">Low-Level Design (LLD)</span>
-                  </div>
-                  {selectedLevel === "lld" && <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />}
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Class Models, Detailed DDL Schemas, API Payload Contracts, Sequence Workflows, Algorithms & Retries.
-                </p>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedLevel("full");
-                setDesignLevel("full");
-              }}
-              className={`flex flex-col justify-between h-full p-4 rounded-xl border text-left transition ${
-                selectedLevel === "full"
-                  ? "border-cyan-500 bg-cyan-950/40 ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-950/30"
-                  : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 rounded bg-cyan-950 border border-cyan-800 text-cyan-400">
-                      <FileText className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="font-bold text-xs text-cyan-300">Full Architecture (HLD + LLD)</span>
-                  </div>
-                  {selectedLevel === "full" && <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />}
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Comprehensive end-to-end design specification incorporating both macro topology and deep code mechanics.
-                </p>
-              </div>
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Detailed Form Parameters</span>
             </button>
           </div>
-        </div>
-
-        {/* Stepper Progress Bar */}
-        <div className="grid grid-cols-3 gap-2 mt-6">
-          <button
-            type="button"
-            onClick={() => setStepIndex(1)}
-            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
-              stepIndex === 1
-                ? "border-indigo-500 bg-indigo-950/40 text-white"
-                : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                stepIndex === 1 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
-              }`}
-            >
-              1
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-xs text-slate-200 truncate">Project Basics</div>
-              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Scale, Domain, Audience</div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStepIndex(2)}
-            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
-              stepIndex === 2
-                ? "border-indigo-500 bg-indigo-950/40 text-white"
-                : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                stepIndex === 2 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
-              }`}
-            >
-              2
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-xs text-slate-200 truncate">Capabilities</div>
-              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Features, SLAs, Compliance</div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStepIndex(3)}
-            className={`flex items-center gap-2 p-2 sm:p-3 rounded-xl border text-left transition ${
-              stepIndex === 3
-                ? "border-indigo-500 bg-indigo-950/40 text-white"
-                : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            <div
-              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                stepIndex === 3 ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
-              }`}
-            >
-              3
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-xs text-slate-200 truncate">Constraints</div>
-              <div className="text-[10px] text-slate-400 hidden sm:block truncate">Budget, Topology, Cloud</div>
-            </div>
-          </button>
         </div>
       </div>
 
-      {/* Form Container */}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* STEP 1: Project Basics */}
-        {stepIndex === 1 && (
-          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-indigo-400" />
-                <span>Project Identity & Scale Parameters</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Define the system boundary, domain context, and target concurrency metrics.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  System / Project Title <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("title")}
-                  placeholder="e.g. Global High-Throughput Financial Clearinghouse"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                {errors.title && <p className="text-xs text-red-400 mt-1">{errors.title.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Business Domain <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("domain")}
-                  placeholder="e.g. FinTech, Healthcare, E-Commerce, IoT, EdTech"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                {errors.domain && <p className="text-xs text-red-400 mt-1">{errors.domain.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Target Audience / Stakeholders
-                </label>
-                <input
-                  type="text"
-                  {...register("targetAudience")}
-                  placeholder="e.g. B2B Enterprise Tenants, Mobile App Users"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Peak Expected Throughput (RPS) <span className="text-red-400">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    {...register("rps", { valueAsNumber: true })}
-                    placeholder="10000"
-                    className="w-full pl-3.5 pr-14 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <span className="absolute right-3.5 top-2.5 text-xs text-slate-500 font-semibold">RPS</span>
+      {/* =========================================================================
+          MODE 1: AI NATURAL LANGUAGE PROMPT INTAKE & SYNTHESIS
+          ========================================================================= */}
+      {intakeMode === "ai-prompt" && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Step 1: Prompt Input Card */}
+          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                  <Sparkles className="w-4 h-4" />
                 </div>
-                {errors.rps && <p className="text-xs text-red-400 mt-1">{errors.rps.message}</p>}
+                <div>
+                  <h2 className="text-base font-bold text-white">Enter Business Idea or Technical Brief</h2>
+                  <p className="text-xs text-slate-400">
+                    Describe your application goals, target scale, key features, or paste requirements.
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Active User Scale (MAU / Concurrency) <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("users")}
-                  placeholder="e.g. 10,000,000 MAU / 250,000 Concurrent"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                {errors.users && <p className="text-xs text-red-400 mt-1">{errors.users.message}</p>}
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Data Retention & Storage Lifecycle <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("dataRetention")}
-                  placeholder="e.g. 7 Years historical audit storage; 90 days hot memory cache"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-                {errors.dataRetention && <p className="text-xs text-red-400 mt-1">{errors.dataRetention.message}</p>}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setStepIndex(2)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition"
-              >
-                <span>Next: Core Capabilities</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: Core Capabilities & SLAs */}
-        {stepIndex === 2 && (
-          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-400" />
-                <span>Functional Requirements & Non-Functional SLAs</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Specify user journeys, latency budgets, availability uptime targets, and regulatory standards.
-              </p>
-            </div>
-
-            {/* Functional Requirements Builder */}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                Functional Requirements / Core Features
-              </label>
-
-              <div className="space-y-2 mb-3">
-                {functionalList.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200"
-                  >
-                    <div className="flex items-center gap-2.5 flex-1">
-                      <span className="w-5 h-5 rounded-full bg-slate-800 text-indigo-400 flex items-center justify-center font-mono font-bold text-[11px] shrink-0">
-                        {idx + 1}
-                      </span>
-                      <span>{item}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFeature(idx)}
-                      className="text-slate-500 hover:text-red-400 p-1 transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newFeatureText}
-                  onChange={(e) => setNewFeatureText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddFeature();
-                    }
-                  }}
-                  placeholder="e.g. Asynchronous payment reconciliation worker with dead-letter queue"
-                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs focus:border-indigo-500 focus:outline-none"
-                />
+              {aiAnalysis && (
                 <button
                   type="button"
-                  onClick={handleAddFeature}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-indigo-600 text-white text-xs font-semibold transition"
+                  onClick={() => setAiAnalysis(null)}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Feature</span>
+                  Edit Brief
                 </button>
-              </div>
+              )}
             </div>
 
-            {/* Non-Functional Requirements */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 border-t border-slate-800">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Latency Budget & SLA <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("latency")}
-                  placeholder="e.g. p99 < 120ms for authorization; p95 < 50ms for reads"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-                {errors.latency && <p className="text-xs text-red-400 mt-1">{errors.latency.message}</p>}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Availability / Uptime Target <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  {...register("availability")}
-                  placeholder="e.g. 99.999% SLA (< 5.26 minutes annual downtime)"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-                {errors.availability && <p className="text-xs text-red-400 mt-1">{errors.availability.message}</p>}
-              </div>
-            </div>
-
-            {/* Compliance & Security Tags */}
-            <div className="pt-3 border-t border-slate-800">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                Regulatory Standards & Compliance Mandates
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {COMPLIANCE_OPTIONS.map((opt) => {
-                  const isChecked = selectedCompliance.includes(opt);
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => toggleCompliance(opt)}
-                      className={`flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs transition ${
-                        isChecked
-                          ? "border-indigo-500 bg-indigo-950/40 text-indigo-300 font-semibold"
-                          : "border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700"
-                      }`}
-                    >
-                      <CheckCircle2
-                        className={`w-3.5 h-3.5 shrink-0 ${isChecked ? "text-indigo-400" : "text-slate-600"}`}
-                      />
-                      <span className="truncate">{opt}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setStepIndex(1)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStepIndex(3)}
-                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition"
-              >
-                <span>Next: Constraints & Cloud</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: Constraints & Cloud Environment */}
-        {stepIndex === 3 && (
-          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
-            <div className="border-b border-slate-800 pb-4">
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                <span>Operational Constraints & Cloud Environment</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Capture infrastructure targets, budget boundaries, legacy adapters, and team capabilities.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                Target Cloud & Hosting Environments
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {CLOUD_ENVIRONMENTS.map((env) => (
-                  <div
-                    key={env}
-                    className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs text-slate-300"
-                  >
-                    <Server className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span>{env}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
-                Architectural Constraints, Budget & Legacy Limits (1 per line)
-              </label>
+            {/* Prompt Textarea */}
+            <div className="relative">
               <textarea
-                {...register("constraints")}
                 rows={4}
-                placeholder="e.g.&#10;Strict RPO=0 (zero data loss on database crash)&#10;Cloud infrastructure budget capped under $5,000/month&#10;Legacy ERP REST API must be wrapped with an Anti-Corruption Layer (ACL)"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs font-mono leading-relaxed focus:border-indigo-500 focus:outline-none resize-none"
+                value={naturalPrompt}
+                onChange={(e) => setNaturalPrompt(e.target.value)}
+                placeholder="e.g. Build an e-commerce platform for a residential society where only verified society members can buy and sell products. Include user authentication, product listings, orders, payments, admin approval, notifications, and deployment on a cloud platform..."
+                className="w-full p-4 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs sm:text-sm font-sans leading-relaxed focus:border-indigo-500 focus:outline-none resize-y"
               />
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
+            {/* Quick Preset Pills */}
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 block mb-2">
+                Or Try an Example Project Brief:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {SAMPLE_USER_PROMPTS.map((sample) => (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    onClick={() => {
+                      setNaturalPrompt(sample.prompt);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-indigo-500/60 text-slate-300 hover:text-indigo-200 text-xs transition flex items-center gap-2"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    <span className="font-semibold text-white">{sample.title}</span>
+                    <span className="text-[10px] text-slate-500 hidden sm:inline">({sample.badge})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Run Analysis Action */}
+            <div className="pt-2 flex justify-end">
               <button
                 type="button"
-                onClick={() => setStepIndex(2)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                onClick={handleRunAiAnalysis}
+                disabled={isAnalyzing || !naturalPrompt.trim()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-indigo-600/30"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
-              </button>
-
-              <button
-                type="submit"
-                className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white text-xs font-bold shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Analyze & Recommend Architecture</span>
-                <ArrowRight className="w-4 h-4 ml-0.5" />
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Analyzing Architectural Blueprint...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Analyze & Synthesize Architecture</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
-        )}
-      </form>
+
+          {/* Step 2: AI Architectural Analysis & Verification Dashboard */}
+          {aiAnalysis && (
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+              {/* Top Synthesis Overview Card */}
+              <div className="p-6 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-900/40">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-700/60 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
+                      Synthesized Blueprint
+                    </span>
+                    <h3 className="text-lg font-bold text-white mt-1">{aiAnalysis.projectName}</h3>
+                    <p className="text-xs text-slate-400">Domain: {aiAnalysis.domain}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-300 font-bold text-xs">
+                      Pattern: {aiAnalysis.recommendedPattern}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {aiAnalysis.problemStatement}
+                </p>
+
+                {/* Tech Stack Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2">
+                  {Object.entries(aiAnalysis.recommendedStack).map(([layer, tech]) => (
+                    <div key={layer} className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                        {layer}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-200 block truncate" title={tech}>
+                        {tech}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Clarifying Questions & Documented Assumptions */}
+              <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+                  <HelpCircle className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-bold text-white">Clarifying Questions & Architectural Assumptions</h3>
+                </div>
+
+                <div className="space-y-3">
+                  {aiAnalysis.clarifyingQuestions.map((cq, idx) => (
+                    <div key={cq.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                      <div className="flex items-start gap-2">
+                        <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 font-bold text-[10px]">
+                          Q{idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-slate-200">{cq.question}</p>
+                          <p className="text-slate-400 mt-1">
+                            <strong>Documented Assumption:</strong> {cq.answer}
+                          </p>
+                          <p className="text-[11px] text-indigo-400 mt-0.5">
+                            <strong>Architectural Impact:</strong> {cq.impact}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Functional Requirements Specification (Editable) */}
+              <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+                    <h3 className="text-sm font-bold text-white">
+                      Extracted Functional Requirements ({aiAnalysis.functionalRequirements.length})
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingReq(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold hover:bg-indigo-600 hover:text-white transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Requirement</span>
+                  </button>
+                </div>
+
+                {isAddingReq && (
+                  <div className="p-3 rounded-xl bg-slate-950 border border-indigo-500/40 space-y-2 text-xs">
+                    <input
+                      type="text"
+                      placeholder="Requirement Title (e.g. Audit Log Retention)"
+                      value={newReqTitle}
+                      onChange={(e) => setNewReqTitle(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none"
+                    />
+                    <textarea
+                      rows={2}
+                      placeholder="Detailed requirement description..."
+                      value={newReqDesc}
+                      onChange={(e) => setNewReqDesc(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingReq(false)}
+                        className="px-3 py-1 rounded bg-slate-800 text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddRequirement}
+                        className="px-3 py-1 rounded bg-indigo-600 text-white font-bold"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2.5">
+                  {aiAnalysis.functionalRequirements.map((req) => (
+                    <div
+                      key={req.id}
+                      className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex items-start justify-between gap-3 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-indigo-400">{req.id}</span>
+                          <span className="font-bold text-white">{req.title}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-800 text-slate-400">
+                            {req.priority}
+                          </span>
+                        </div>
+                        <p className="text-slate-400 mt-1 leading-relaxed">{req.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRequirement(req.id)}
+                        className="p-1.5 rounded hover:bg-red-950/50 text-slate-500 hover:text-red-400 transition"
+                        title="Remove requirement"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Configurable Document Generation Checklist (17 Core Documents) */}
+              <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileCheck className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-sm font-bold text-white">
+                        Document Generation Checklist ({selectedDocs.length} of {ALL_CORE_DOCUMENT_TYPES.length} Selected)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Select which technical architecture documents to generate automatically.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleSelectRecommendedDocs}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                    >
+                      Recommended Default
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSelectAllDocs}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                    >
+                      Select All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {ALL_CORE_DOCUMENT_TYPES.map((docDef) => {
+                    const isSelected = selectedDocs.includes(docDef.type);
+                    return (
+                      <div
+                        key={docDef.type}
+                        onClick={() => toggleDocType(docDef.type)}
+                        className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 select-none ${
+                          isSelected
+                            ? "bg-indigo-950/30 border-indigo-500/50 text-white"
+                            : "bg-slate-950/60 border-slate-800/80 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        <div className="mt-0.5 shrink-0">
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-indigo-400" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-600" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs truncate">{docDef.title}</span>
+                          </div>
+                          <span className="text-[10px] text-indigo-400/80 font-mono block">
+                            {docDef.category}
+                          </span>
+                          <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+                            {docDef.description}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Action Footer */}
+              <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <span className="text-xs text-slate-400 text-center sm:text-left">
+                  Your manual edits and custom sections can be modified anytime in the Document Studio.
+                </span>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleRunAiAnalysis}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+                  >
+                    Regenerate Analysis
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleApproveAndGenerate}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-emerald-600/30"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Approve & Generate {selectedDocs.length} Documents</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODE 2: STRUCTURED 3-STEP SPECIFICATION FORM (Legacy Compatibility)
+          ========================================================================= */}
+      {intakeMode === "structured-form" && (
+        <form onSubmit={handleSubmit(onSubmitStructured)} className="space-y-6 animate-in fade-in">
+          {/* STEP 1: Project Basics */}
+          {stepIndex === 1 && (
+            <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
+              <div className="border-b border-slate-800 pb-4">
+                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-indigo-400" />
+                  <span>Project Identity & Scale Parameters</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Define the system boundary, domain context, and target concurrency metrics.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    System / Project Title <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("title")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. SocietyNest Community Marketplace"
+                  />
+                  {errors.title && <p className="text-red-400 text-[11px] mt-1">{errors.title.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Domain / Vertical <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("domain")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. Community E-Commerce"
+                  />
+                  {errors.domain && <p className="text-red-400 text-[11px] mt-1">{errors.domain.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Peak Requests / Second (RPS) <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    {...register("rps", { valueAsNumber: true })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. 500"
+                  />
+                  {errors.rps && <p className="text-red-400 text-[11px] mt-1">{errors.rps.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Active User Base / Scale <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("users")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. 5,000 Verified Households"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Data Retention Policy <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("dataRetention")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. 3 Years Audit Trail"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(2)}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+                >
+                  <span>Next: Capabilities & SLAs</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Capabilities & SLAs */}
+          {stepIndex === 2 && (
+            <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
+              <div className="border-b border-slate-800 pb-4">
+                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>Capabilities & Quantitative SLAs</span>
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Latency SLA Target <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("latency")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. p95 < 150ms"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Availability SLA <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    {...register("availability")}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                    placeholder="e.g. 99.95%"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Functional Requirements
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={newFeatureText}
+                      onChange={(e) => setNewFeatureText(e.target.value)}
+                      placeholder="Add a functional requirement..."
+                      className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newFeatureText.trim()) return;
+                        setFunctionalList([...functionalList, newFeatureText.trim()]);
+                        setNewFeatureText("");
+                      }}
+                      className="px-3 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {functionalList.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300">
+                        <span>{f}</span>
+                        <button
+                          type="button"
+                          onClick={() => setFunctionalList(functionalList.filter((_, idx) => idx !== i))}
+                          className="text-slate-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(1)}
+                  className="flex items-center gap-1 px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(3)}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+                >
+                  <span>Next: Constraints & Generation</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Constraints & Generation */}
+          {stepIndex === 3 && (
+            <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-6 shadow-xl animate-in fade-in">
+              <div className="border-b border-slate-800 pb-4">
+                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  <span>Constraints & Synthesis</span>
+                </h2>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Architectural Constraints (One per line)
+                </label>
+                <textarea
+                  rows={4}
+                  {...register("constraints")}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                  placeholder="e.g. Operating budget must be under $100/mo&#10;Must deploy on managed serverless containers"
+                />
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(2)}
+                  className="flex items-center gap-1 px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-emerald-600/30"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Generate Architecture Specification</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
+      )}
     </div>
   );
 };

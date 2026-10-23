@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.1.0] - 2026-10-23
+
+### End-to-End AI User Journey & Multi-Document Architecture Studio
+
+This release completes the primary user journey: **Natural-language idea intake → AI requirement analysis & synthesis → Coordinated 17-document generation → Three-panel review and non-destructive editing → Document lifecycle governance → Multi-format and project package export.**
+
+#### Added
+- **Natural Language Idea Intake:**
+  - Free-form natural-language prompt intake supporting arbitrary ideas, specifications, or pasted briefs (e.g., residential society e-commerce, global fintech payment gateways, telehealth platforms, IoT fleet tracking).
+  - One-click industry preset chips for instant experimentation.
+- **AI Requirements Analysis & Synthesis:**
+  - Automated extraction of business problem statement, strategic objectives, functional requirements (FR-001..FR-00n), and quantitative non-functional SLAs.
+  - Interactive clarifying questions with documented architectural assumptions and impact analysis.
+  - Interactive requirements editor (Add, Edit, Remove, Prioritize).
+  - Configurable 17-document generation checklist with category grouping and recommended defaults.
+- **17 Core Technical Architecture Documents:**
+  - Project Overview & Scope, Business Requirements Document (BRD), Software Requirements Specification (SRS), High-Level Design (HLD), Low-Level Design (LLD), Solution Architecture Document (SAD), Architecture Decision Records (ADRs), Database Design Document (DDL & ERD), API Specification, Integration Design Document, Security Architecture & STRIDE Threat Model, Deployment Architecture, CI/CD Pipeline Design, Testing Strategy & Quality Plan, Operational Runbook & SRE Manual, RAID Log (Risks, Assumptions, Issues, Dependencies), Implementation Roadmap & Milestones.
+- **Three-Panel Document Workspace Layout:**
+  - **Left Panel (Workspace Navigator):** Document switcher for all generated documents, lifecycle status badge, search bar, and reorderable/lockable sections list.
+  - **Center Panel (Editor & Live Preview):** Split, Preview, and Editor views with real-time Mermaid vector rendering, syntax highlighting, and section-level locking.
+  - **Right Panel (Contextual AI Assistant & Governance Inspector):**
+    - 9 Contextual AI Transformation chips ("Simplify for non-technical stakeholders", "Improve scalability & cost", "Convert to modular monolith", "Add failure handling & retries", "Add security controls", "Generate sequence diagram", "Compare databases", etc.).
+    - Side-by-side Visual Diff modal (`diffModal`) before applying changes.
+    - Document Lifecycle State selector (`Draft` → `In Review` → `Changes Requested` → `Approved` → `Published` → `Archived`).
+    - Review notes and comments timeline with author and role sign-offs.
+    - Document metrics inspector (word count, reading time, section counts).
+- **Multi-File Project Package Export:**
+  - One-click download of the complete documentation package (`README.md` manifest, individual markdown and HTML documents, structured JSON and YAML architecture specifications).
+  - Print / Save as PDF support with print-optimized CSS layout.
+- **Automated Verification:**
+  - 23/23 tests passing across 7 automated test suites.
+  - TypeScript compiles with 0 errors and Next.js production build succeeds across all 28 routes.
+
+---
+
 ## [2.0.0] - 2026-10-23
 
 ### Major Architecture Studio Upgrade
