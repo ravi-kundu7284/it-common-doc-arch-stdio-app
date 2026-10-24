@@ -35,4 +35,7 @@
     <!-- 009: Add Profile Fields (First/Last Name, Phone, Avatar, Company, Timezone, Bio) -->
     <include file="changesets/009-add-profile-fields-to-app-users.sql" relativeToChangelogFile="true"/>
 
+    <!-- 010: Email Verification, Phone Verification, Auth Tokens, Notifications & Usage Counters -->
+    <include file="changesets/010-add-auth-verification-and-notifications.sql" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

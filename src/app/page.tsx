@@ -11,6 +11,7 @@ import { RequirementsRegistry } from "@/components/requirements-registry";
 import { AdrManager } from "@/components/adr-manager";
 import { QualityAuditView } from "@/components/quality-audit-view";
 import { StepNavigationBar } from "@/components/step-navigation-bar";
+import { VerificationBanner } from "@/components/verification-banner";
 import { useDocStore } from "@/store/use-doc-store";
 import { useAuthStore } from "@/store/use-auth-store";
 import { LoginLanding } from "@/components/login-landing";
@@ -57,6 +58,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col bg-[#090d16]">
+      <VerificationBanner />
       <Navbar />
 
       <div className="flex-1">

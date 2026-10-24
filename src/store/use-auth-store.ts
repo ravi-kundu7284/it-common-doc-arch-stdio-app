@@ -16,6 +16,9 @@ export interface UserProfile {
   designation?: string;
   role?: string; // 'architect' | 'admin' | 'reviewer'
   lastLoginAt?: string;
+  emailVerifiedAt?: string | null;
+  phoneVerifiedAt?: string | null;
+  notificationPrefs?: any;
 }
 
 export interface UserAiConfigInfo {
@@ -97,6 +100,30 @@ interface AuthState {
     expiresInDays: number
   ) => Promise<{ success: boolean; error?: string; message?: string }>;
   deleteAiConfig: () => Promise<{ success: boolean; error?: string }>;
+  sendPhoneOtp: (
+    phone: string,
+    countryCode?: string,
+    captchaToken?: string
+  ) => Promise<{
+    success: boolean;
+    verificationId?: string;
+    error?: string;
+    message?: string;
+  }>;
+  verifyPhoneOtp: (
+    verificationId: string,
+    code: string
+  ) => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
+  updateNotificationPrefs: (preferences: any) => Promise<{
+    success: boolean;
+    preferences?: any;
+    error?: string;
+    message?: string;
+  }>;
   openAuthModal: (
     mode?: "signin" | "signup" | "forgot" | "reset",
     resetToken?: string
@@ -366,6 +393,79 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ aiConfig: null });
       return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  sendPhoneOtp: async (phone: string, countryCode?: string, captchaToken?: string) => {
+    try {
+      const res = await fetch("/api/auth/phone/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone, countryCode, captchaToken }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Failed to send SMS OTP" };
+      }
+      return { success: true, verificationId: data.verificationId, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  verifyPhoneOtp: async (verificationId: string, code: string) => {
+    try {
+      const res = await fetch("/api/auth/phone/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ verificationId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Failed to verify code" };
+      }
+      const currentUser = get().user;
+      if (currentUser) {
+        set({
+          user: {
+            ...currentUser,
+            phone: data.phone || currentUser.phone,
+            phoneVerifiedAt: new Date().toISOString(),
+          },
+        });
+      }
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  updateNotificationPrefs: async (preferences: any) => {
+    try {
+      const res = await fetch("/api/user/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ preferences }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Failed to save notification preferences" };
+      }
+      const currentUser = get().user;
+      if (currentUser) {
+        set({
+          user: {
+            ...currentUser,
+            notificationPrefs: data.preferences,
+          },
+        });
+      }
+      return { success: true, preferences: data.preferences, message: data.message };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
     }

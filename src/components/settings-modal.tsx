@@ -29,6 +29,10 @@ import {
   ChevronDown,
   Briefcase,
   Mail,
+  Bell,
+  CheckCircle2,
+  Loader2,
+  Smartphone,
 } from "lucide-react";
 import {
   COUNTRY_CODES,
@@ -59,9 +63,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     deleteAiConfig,
     openAuthModal,
     updateProfile,
+    sendPhoneOtp,
+    verifyPhoneOtp,
+    updateNotificationPrefs,
   } = useAuthStore();
 
-  const [activeTab, setActiveTab] = useState<"profile" | "ai">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "ai" | "notifications">("profile");
+
+  // Phone OTP verification state
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpFeedback, setOtpFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Notification preferences state
+  const [notifPrefs, setNotifPrefs] = useState({
+    email: { export: true, audit: true, adr: true },
+    sms: { export: false, audit: false, adr: false },
+  });
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+  const [prefsFeedback, setPrefsFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Profile states
   const [firstName, setFirstName] = useState("");
@@ -128,7 +152,98 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setModelName(targetModel);
     setApiKey(apiSettings.apiKey || "");
     if (aiConfig?.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
+
+    if (user?.notificationPrefs) {
+      setNotifPrefs({
+        email: {
+          export: user.notificationPrefs.email?.export !== false,
+          audit: user.notificationPrefs.email?.audit !== false,
+          adr: user.notificationPrefs.email?.adr !== false,
+        },
+        sms: {
+          export: Boolean(user.notificationPrefs.sms?.export),
+          audit: Boolean(user.notificationPrefs.sms?.audit),
+          adr: Boolean(user.notificationPrefs.sms?.adr),
+        },
+      });
+    }
   }, [aiConfig, apiSettings, isOpen, user]);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpCooldown]);
+
+  const handleSendPhoneOtp = async () => {
+    if (!phone || isSendingOtp || otpCooldown > 0) return;
+    setIsSendingOtp(true);
+    setOtpFeedback(null);
+
+    const res = await sendPhoneOtp(phone, phoneCountryCode);
+    setIsSendingOtp(false);
+
+    if (res.success && res.verificationId) {
+      setVerificationSessionId(res.verificationId);
+      setShowOtpInput(true);
+      setOtpCooldown(60);
+      setOtpFeedback({
+        type: "success",
+        text: res.message || "Verification code sent to your phone via SMS.",
+      });
+    } else {
+      setOtpFeedback({
+        type: "error",
+        text: res.error || "Failed to send SMS OTP.",
+      });
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (!verificationSessionId || !otpCode || isVerifyingOtp) return;
+    setIsVerifyingOtp(true);
+    setOtpFeedback(null);
+
+    const res = await verifyPhoneOtp(verificationSessionId, otpCode);
+    setIsVerifyingOtp(false);
+
+    if (res.success) {
+      setShowOtpInput(false);
+      setOtpCode("");
+      setOtpFeedback({
+        type: "success",
+        text: res.message || "Phone verified! SMS notifications are now unlocked.",
+      });
+    } else {
+      setOtpFeedback({
+        type: "error",
+        text: res.error || "Incorrect or expired verification code.",
+      });
+    }
+  };
+
+  const handleSaveNotificationPrefs = async () => {
+    setIsSavingPrefs(true);
+    setPrefsFeedback(null);
+
+    const res = await updateNotificationPrefs(notifPrefs);
+    setIsSavingPrefs(false);
+
+    if (res.success) {
+      setPrefsFeedback({
+        type: "success",
+        text: "Notification preferences saved successfully.",
+      });
+      setTimeout(() => setPrefsFeedback(null), 4000);
+    } else {
+      setPrefsFeedback({
+        type: "error",
+        text: res.error || "Failed to save preferences.",
+      });
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -358,6 +473,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           >
             <Key className="w-3.5 h-3.5" />
             <span>AI & Security Vault</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notifications")}
+            className={`pb-2.5 px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition ${
+              activeTab === "notifications"
+                ? "border-indigo-500 text-white"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>Notifications & SMS</span>
           </button>
         </div>
 
@@ -596,6 +723,97 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   />
                 </div>
               </div>
+
+              {/* Phone Verification Section */}
+              {user?.phoneVerifiedAt ? (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Verified ({user.phone || phone}) • SMS alerts enabled</span>
+                </div>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500">
+                      SMS is optional. Only required to enable SMS notifications.
+                    </span>
+                    {phone.trim().length >= 6 && !showOtpInput && (
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneOtp}
+                        disabled={isSendingOtp || otpCooldown > 0}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-semibold transition disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {isSendingOtp ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Sending OTP...
+                          </>
+                        ) : otpCooldown > 0 ? (
+                          `Resend in ${otpCooldown}s`
+                        ) : (
+                          "Verify Phone via SMS"
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {showOtpInput && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-indigo-500/40 space-y-2.5">
+                      <div className="text-[11px] text-slate-300 font-medium">
+                        Enter 6-Digit OTP sent to your phone:
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value)}
+                          placeholder="123456"
+                          className="w-32 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-center text-sm font-mono tracking-widest text-white focus:outline-none focus:border-indigo-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifyPhoneOtp}
+                          disabled={isVerifyingOtp || otpCode.length < 4}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {isVerifyingOtp ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-3 h-3" />
+                          )}
+                          <span>Verify Code</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendPhoneOtp}
+                          disabled={isSendingOtp || otpCooldown > 0}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs disabled:opacity-50"
+                        >
+                          {otpCooldown > 0 ? `${otpCooldown}s` : "Resend OTP"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {otpFeedback && (
+                    <div
+                      className={`p-2 rounded-lg text-[11px] flex items-center gap-1.5 ${
+                        otpFeedback.type === "success"
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : "bg-red-500/10 text-red-400 border border-red-500/20"
+                      }`}
+                    >
+                      {otpFeedback.type === "success" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{otpFeedback.text}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Company & Timezone */}
@@ -961,6 +1179,191 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         </div>
         )}
 
+        {/* TAB 3: NOTIFICATION PREFERENCES & SMS */}
+        {activeTab === "notifications" && (
+          <div className="space-y-4 text-xs animate-in fade-in">
+            {prefsFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                  prefsFeedback.type === "success"
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : "bg-red-500/10 border-red-500/30 text-red-300"
+                }`}
+              >
+                {prefsFeedback.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                )}
+                <span>{prefsFeedback.text}</span>
+              </div>
+            )}
+
+            {/* Email Notifications Section */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-indigo-400" />
+                  <span className="font-semibold text-slate-200">Email Notifications</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  Delivered to {user?.email || "registered email"}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                  <div>
+                    <div className="font-medium text-slate-200">Document Export Alerts</div>
+                    <div className="text-[11px] text-slate-400">Receive an email receipt whenever technical documents or HTML packages are generated.</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.email.export}
+                    onChange={(e) =>
+                      setNotifPrefs({
+                        ...notifPrefs,
+                        email: { ...notifPrefs.email, export: e.target.checked },
+                      })
+                    }
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                  <div>
+                    <div className="font-medium text-slate-200">Architecture Quality Reviews</div>
+                    <div className="text-[11px] text-slate-400">Receive reports when automated SPOF, financial audit, and governance reviews complete.</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.email.audit}
+                    onChange={(e) =>
+                      setNotifPrefs({
+                        ...notifPrefs,
+                        email: { ...notifPrefs.email, audit: e.target.checked },
+                      })
+                    }
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                  <div>
+                    <div className="font-medium text-slate-200">ADR Governance & Supersession</div>
+                    <div className="text-[11px] text-slate-400">Receive notifications when Architecture Decision Records are approved, rejected, or superseded.</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={notifPrefs.email.adr}
+                    onChange={(e) =>
+                      setNotifPrefs({
+                        ...notifPrefs,
+                        email: { ...notifPrefs.email, adr: e.target.checked },
+                      })
+                    }
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* SMS Notifications Section (Optional) */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <span className="font-semibold text-slate-200">SMS Mobile Alerts</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Optional</span>
+                </div>
+                {user?.phoneVerifiedAt ? (
+                  <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Verified: {user.phone}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-400 font-medium">Phone Unverified</span>
+                )}
+              </div>
+
+              {!user?.phoneVerifiedAt ? (
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1.5">
+                  <div className="font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Phone Verification Required for SMS Alerts
+                  </div>
+                  <p className="text-amber-300/80">
+                    To protect security and eliminate unsolicited SMS volume, SMS alerts default to OFF and require a verified mobile phone number.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("profile")}
+                    className="mt-1 text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+                  >
+                    Go to Profile Settings to verify your phone number &rarr;
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2.5 pt-1">
+                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                    <div>
+                      <div className="font-medium text-slate-200">High-Priority Export SMS</div>
+                      <div className="text-[11px] text-slate-400">Instant SMS alert when large documentation bundles complete exporting.</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs.sms.export}
+                      onChange={(e) =>
+                        setNotifPrefs({
+                          ...notifPrefs,
+                          sms: { ...notifPrefs.sms, export: e.target.checked },
+                        })
+                      }
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                    <div>
+                      <div className="font-medium text-slate-200">Critical Quality Audit Failure SMS</div>
+                      <div className="text-[11px] text-slate-400">Instant SMS dispatch if an architectural review fails high-severity SPOF or DLQ security checks.</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs.sms.audit}
+                      onChange={(e) =>
+                        setNotifPrefs({
+                          ...notifPrefs,
+                          sms: { ...notifPrefs.sms, audit: e.target.checked },
+                        })
+                      }
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-900/50 cursor-pointer">
+                    <div>
+                      <div className="font-medium text-slate-200">Critical ADR Supersession SMS</div>
+                      <div className="text-[11px] text-slate-400">Receive SMS notifications when production Architecture Decision Records are superseded.</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs.sms.adr}
+                      onChange={(e) =>
+                        setNotifPrefs({
+                          ...notifPrefs,
+                          sms: { ...notifPrefs.sms, adr: e.target.checked },
+                        })
+                      }
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Sticky Footer Actions */}
         <div className="sticky bottom-0 bg-slate-900 pt-3 mt-4 border-t border-slate-800 flex items-center justify-end gap-2.5 z-10">
           <button
@@ -977,6 +1380,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             >
               <Check className="w-4 h-4" />
               <span>{isSavingProfile ? "Saving Profile..." : "Save Profile Settings"}</span>
+            </button>
+          ) : activeTab === "notifications" ? (
+            <button
+              onClick={handleSaveNotificationPrefs}
+              disabled={isSavingPrefs || !isAuthenticated}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSavingPrefs ? "Saving..." : "Save Preferences"}</span>
             </button>
           ) : (
             <button

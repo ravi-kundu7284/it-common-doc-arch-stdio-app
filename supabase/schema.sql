@@ -42,7 +42,10 @@ CREATE TABLE IF NOT EXISTS dev.app_users (
     reset_token VARCHAR(128),
     reset_token_expires_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    last_login_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    email_verified_at TIMESTAMP WITH TIME ZONE,
+    phone_verified_at TIMESTAMP WITH TIME ZONE,
+    notification_prefs JSONB DEFAULT '{"email":{"verify":true,"password_reset":true,"export":true,"audit":true,"adr":true},"sms":{"audit":false,"adr":false,"export":false}}'::jsonb
 );
 
 -- Fast lookup indexes for authentication and security checks
@@ -403,3 +406,72 @@ WHERE NOT EXISTS (SELECT 1 FROM dev.databasechangelog WHERE id = '008-create-arc
 -- 9. Refresh PostgREST schema cache immediately
 NOTIFY pgrst, 'reload schema';
 
+
+
+-- 11. Auth Tokens Table (Secure SHA-256 Hashed Tokens for Email Verification & Password Reset)
+CREATE TABLE IF NOT EXISTS dev.auth_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES dev.app_users(id) ON DELETE CASCADE,
+    type VARCHAR(30) NOT NULL, -- 'email_verify' | 'password_reset'
+    token_hash VARCHAR(64) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON dev.auth_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON dev.auth_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_lookup ON dev.auth_tokens(token_hash, type);
+
+-- 12. Phone Verifications Table (SMS OTP Verifications)
+CREATE TABLE IF NOT EXISTS dev.phone_verifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES dev.app_users(id) ON DELETE CASCADE,
+    phone VARCHAR(30) NOT NULL,
+    provider_verification_id VARCHAR(128),
+    status VARCHAR(20) DEFAULT 'pending',
+    attempts INT DEFAULT 0,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON dev.phone_verifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_phone ON dev.phone_verifications(phone);
+
+-- 13. Notification Audit Logs Table
+CREATE TABLE IF NOT EXISTS dev.notification_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES dev.app_users(id) ON DELETE SET NULL,
+    channel VARCHAR(10) NOT NULL,
+    template VARCHAR(50) NOT NULL,
+    recipient VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    provider_message_id VARCHAR(128),
+    error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_logs_user ON dev.notification_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_notification_logs_created ON dev.notification_logs(created_at);
+
+-- 14. Usage Counters Table (Hard Cap Cost Guard)
+CREATE TABLE IF NOT EXISTS dev.usage_counters (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    channel VARCHAR(10) NOT NULL,
+    period_key VARCHAR(60) NOT NULL,
+    count INT DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT uq_dev_channel_period UNIQUE (channel, period_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_counters_lookup ON dev.usage_counters(channel, period_key);
+
+ALTER TABLE dev.auth_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.phone_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.notification_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dev.usage_counters ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "App access auth_tokens" ON dev.auth_tokens FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "App access phone_verifications" ON dev.phone_verifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "App access notification_logs" ON dev.notification_logs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "App access usage_counters" ON dev.usage_counters FOR ALL USING (true) WITH CHECK (true);

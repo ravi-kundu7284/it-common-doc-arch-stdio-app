@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { verifySessionToken } from "./crypto";
+import { dbFindUserById } from "./supabase";
 
 export async function getAuthenticatedUser(req: NextRequest): Promise<{ userId: string; role?: string } | null> {
   const sessionCookie = req.cookies.get("docarch_session")?.value;
@@ -20,5 +21,11 @@ export async function getAuthenticatedUser(req: NextRequest): Promise<{ userId: 
 
   // Demo / local sandbox fallback
   return { userId: "00000000-0000-0000-0000-000000000001", role: "architect" };
+}
+
+export async function isUserEmailVerified(userId: string): Promise<boolean> {
+  if (userId === "00000000-0000-0000-0000-000000000001") return true;
+  const user = await dbFindUserById(userId);
+  return Boolean(user?.email_verified_at);
 }
 
