@@ -18,7 +18,21 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get("user-agent") || "Unknown Client";
 
     const body = await req.json();
-    const { username, email, password, fullName, designation } = body;
+    const {
+      username,
+      email,
+      password,
+      fullName,
+      designation,
+      firstName,
+      lastName,
+      phone,
+      phoneCountryCode,
+      avatarUrl,
+      company,
+      timezone,
+      bio,
+    } = body;
 
     // Check database connection configuration
     if (!isSupabaseConfigured() && process.env.NODE_ENV !== "test") {
@@ -80,6 +94,10 @@ export async function POST(req: NextRequest) {
     // Hash password with unique PBKDF2 salt
     const { hash, salt } = await hashPassword(password);
 
+    // Compute full name if first or last name provided
+    const combinedName = [firstName?.trim(), lastName?.trim()].filter(Boolean).join(" ");
+    const computedFullName = fullName?.trim() || combinedName || username.trim();
+
     let newUser;
     try {
       newUser = await dbCreateUser({
@@ -87,8 +105,16 @@ export async function POST(req: NextRequest) {
         email: email.trim().toLowerCase(),
         password_hash: hash,
         password_salt: salt,
-        full_name: fullName || username,
-        designation: designation || "Software Architect",
+        full_name: computedFullName,
+        first_name: firstName?.trim() || null,
+        last_name: lastName?.trim() || null,
+        phone: phone?.trim() || null,
+        phone_country_code: phoneCountryCode?.trim() || null,
+        avatar_url: avatarUrl?.trim() || null,
+        company: company?.trim() || null,
+        timezone: timezone?.trim() || null,
+        bio: bio?.trim() || null,
+        designation: designation?.trim() || "Software Architect",
         role: "architect",
       });
     } catch (dbErr: any) {
@@ -148,6 +174,14 @@ export async function POST(req: NextRequest) {
       username: newUser.username,
       email: newUser.email,
       fullName: newUser.full_name,
+      firstName: newUser.first_name,
+      lastName: newUser.last_name,
+      phone: newUser.phone,
+      phoneCountryCode: newUser.phone_country_code,
+      avatarUrl: newUser.avatar_url,
+      company: newUser.company,
+      timezone: newUser.timezone,
+      bio: newUser.bio,
       designation: newUser.designation,
       role: newUser.role,
       createdAt: newUser.created_at,

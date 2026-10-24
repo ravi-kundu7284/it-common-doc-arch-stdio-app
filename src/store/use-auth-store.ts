@@ -1,10 +1,18 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 
 export interface UserProfile {
   id: string;
   username: string;
   email: string;
   fullName?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneCountryCode?: string | null;
+  avatarUrl?: string | null;
+  company?: string | null;
+  timezone?: string | null;
+  bio?: string | null;
   designation?: string;
   role?: string; // 'architect' | 'admin' | 'reviewer'
   lastLoginAt?: string;
@@ -46,8 +54,30 @@ interface AuthState {
     email: string,
     password: string,
     fullName?: string,
-    designation?: string
+    designation?: string,
+    extraProfile?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      phoneCountryCode?: string;
+      avatarUrl?: string;
+      company?: string;
+      timezone?: string;
+      bio?: string;
+    }
   ) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (profileData: {
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    phoneCountryCode?: string;
+    avatarUrl?: string;
+    company?: string;
+    timezone?: string;
+    bio?: string;
+    designation?: string;
+  }) => Promise<{ success: boolean; error?: string; user?: UserProfile }>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{
     success: boolean;
@@ -186,13 +216,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (username, email, password, fullName, designation) => {
+  register: async (username, email, password, fullName, designation, extraProfile) => {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username, email, password, fullName, designation }),
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          fullName,
+          designation,
+          ...extraProfile,
+        }),
       });
 
       const data = await res.json();
@@ -211,6 +248,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
 
       return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  },
+
+  updateProfile: async (profileData) => {
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(profileData),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Failed to update profile" };
+      }
+
+      set((state) => ({
+        user: data.user ? { ...state.user, ...data.user } : state.user,
+      }));
+
+      return { success: true, user: data.user };
     } catch (err: any) {
       return { success: false, error: err.message || "Network error" };
     }

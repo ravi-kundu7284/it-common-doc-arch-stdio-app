@@ -21,7 +21,20 @@ import {
   Sparkles,
   AlertCircle,
   AlertTriangle,
+  Phone,
+  Upload,
+  Camera,
+  Building2,
+  Globe,
+  ChevronDown,
+  Briefcase,
+  Mail,
 } from "lucide-react";
+import {
+  COUNTRY_CODES,
+  PRESET_AVATARS,
+  TIMEZONES,
+} from "@/lib/country-codes";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -38,9 +51,37 @@ const EXPIRY_OPTIONS = [
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { apiSettings, setApiSettings } = useDocStore();
-  const { user, aiConfig, isAuthenticated, saveAiConfig, deleteAiConfig, openAuthModal } =
-    useAuthStore();
+  const {
+    user,
+    aiConfig,
+    isAuthenticated,
+    saveAiConfig,
+    deleteAiConfig,
+    openAuthModal,
+    updateProfile,
+  } = useAuthStore();
 
+  const [activeTab, setActiveTab] = useState<"profile" | "ai">("profile");
+
+  // Profile states
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
+  const [avatarUrl, setAvatarUrl] = useState(PRESET_AVATARS[0].svgDataUri);
+  const [company, setCompany] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
+  const [bio, setBio] = useState("");
+  const [designation, setDesignation] = useState("Principal Solutions Architect");
+
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  // AI Vault states
   const [provider, setProvider] = useState(apiSettings.provider);
   const [apiKey, setApiKey] = useState(apiSettings.apiKey);
   const [modelName, setModelName] = useState(apiSettings.modelName);
@@ -56,6 +97,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
   // Sync state when modal opens or user/aiConfig changes
   useEffect(() => {
     if (!isOpen) return;
+
+    if (user) {
+      setFirstName(user.firstName || "");
+      setLastName(user.lastName || "");
+      setFullName(user.fullName || "");
+      setPhone(user.phone || "");
+      if (user.phoneCountryCode) setPhoneCountryCode(user.phoneCountryCode);
+      if (user.avatarUrl) setAvatarUrl(user.avatarUrl);
+      setCompany(user.company || "");
+      if (user.timezone) setTimezone(user.timezone);
+      setBio(user.bio || "");
+      setDesignation(user.designation || "Principal Solutions Architect");
+    }
+
     const targetProvider = apiSettings.provider || (aiConfig ? aiConfig.provider : "openai");
     setProvider(targetProvider);
 
@@ -73,9 +128,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setModelName(targetModel);
     setApiKey(apiSettings.apiKey || "");
     if (aiConfig?.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
-  }, [aiConfig, apiSettings, isOpen]);
+  }, [aiConfig, apiSettings, isOpen, user]);
 
   if (!isOpen) return null;
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileFeedback({ type: "error", text: "Avatar image must be under 2MB" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setAvatarUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!isAuthenticated) {
+      setProfileFeedback({ type: "error", text: "Please sign in to save your profile." });
+      return;
+    }
+    setIsSavingProfile(true);
+    setProfileFeedback(null);
+
+    const derivedFullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+    const computedFullName = fullName.trim() || derivedFullName || user?.username || "";
+
+    const res = await updateProfile({
+      firstName: firstName.trim() || undefined,
+      lastName: lastName.trim() || undefined,
+      fullName: computedFullName,
+      phone: phone.trim() || undefined,
+      phoneCountryCode: phone.trim() ? phoneCountryCode : undefined,
+      avatarUrl: avatarUrl || undefined,
+      company: company.trim() || undefined,
+      timezone: timezone || "UTC",
+      bio: bio.trim() || undefined,
+      designation: designation.trim() || "Principal Solutions Architect",
+    });
+
+    setIsSavingProfile(false);
+    if (res.success) {
+      setProfileFeedback({
+        type: "success",
+        text: "Profile updated successfully in Supabase PostgreSQL!",
+      });
+    } else {
+      setProfileFeedback({
+        type: "error",
+        text: res.error || "Failed to update profile",
+      });
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -156,9 +265,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-100">AI Configuration & Security Vault</h3>
+              <h3 className="text-base font-bold text-slate-100">Settings & Studio Preferences</h3>
               <p className="text-xs text-slate-400">
-                AES-256-GCM encrypted API keys with automated expiration in Supabase PostgreSQL
+                Manage your architect profile identity, contact settings, and AI security vault
               </p>
             </div>
           </div>
@@ -172,25 +281,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
         {/* User Account & Database Status Banner */}
         <div className="my-4 p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 flex items-center justify-center font-bold">
-              {user ? user.username.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 flex items-center justify-center font-bold overflow-hidden shrink-0">
+              {avatarUrl || user?.avatarUrl ? (
+                <img
+                  src={(avatarUrl || user?.avatarUrl) || undefined}
+                  alt={user?.username || "Avatar"}
+                  className="w-full h-full object-cover"
+                />
+              ) : user ? (
+                user.username.charAt(0).toUpperCase()
+              ) : (
+                <User className="w-4 h-4" />
+              )}
             </div>
             <div>
               {isAuthenticated ? (
                 <>
-                  <div className="font-semibold text-slate-200">
-                    Logged in as <span className="text-indigo-400 font-mono">@{user?.username}</span>
+                  <div className="font-semibold text-slate-200 flex items-center gap-2">
+                    <span>{fullName || user?.fullName || `@${user?.username}`}</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">@{user?.username}</span>
                   </div>
-                  <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span>Supabase PostgreSQL active</span>
+                  <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                    <span>{designation || user?.designation || "Solutions Architect"}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                      PostgreSQL Connected
+                    </span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="font-semibold text-slate-300">Guest Mode (Session Only)</div>
-                  <div className="text-[10px] text-slate-400">Sign in to save keys with auto-expiry</div>
+                  <div className="text-[10px] text-slate-400">Sign in to save profile and keys</div>
                 </>
               )}
             </div>
@@ -209,26 +333,346 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           )}
         </div>
 
-        {/* Feedback alert */}
-        {feedbackMsg && (
-          <div
-            className={`mb-4 p-3 rounded-xl border text-xs flex items-center gap-2 ${
-              feedbackMsg.type === "success"
-                ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
-                : "bg-red-950/40 border-red-800/60 text-red-300"
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-800 gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={`pb-2.5 px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition ${
+              activeTab === "profile"
+                ? "border-indigo-500 text-white"
+                : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            {feedbackMsg.type === "success" ? (
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <User className="w-3.5 h-3.5" />
+            <span>Profile Settings</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("ai")}
+            className={`pb-2.5 px-3 text-xs font-semibold flex items-center gap-2 border-b-2 transition ${
+              activeTab === "ai"
+                ? "border-indigo-500 text-white"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span>AI & Security Vault</span>
+          </button>
+        </div>
+
+        {/* TAB 1: PROFILE SETTINGS */}
+        {activeTab === "profile" && (
+          <div className="space-y-4 text-xs animate-in fade-in">
+            {profileFeedback && (
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                  profileFeedback.type === "success"
+                    ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
+                    : "bg-red-950/40 border-red-800/60 text-red-300"
+                }`}
+              >
+                {profileFeedback.type === "success" ? (
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                )}
+                <span>{profileFeedback.text}</span>
+              </div>
             )}
-            <span>{feedbackMsg.text}</span>
+
+            {!isAuthenticated && (
+              <div className="p-4 rounded-xl bg-slate-950 border border-indigo-900/40 text-center space-y-2">
+                <p className="text-slate-300">
+                  Sign in or create an account to customize and persist your architect profile settings to Supabase PostgreSQL.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openAuthModal("signup");
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition"
+                >
+                  Create Account / Sign In
+                </button>
+              </div>
+            )}
+
+            {/* Profile Picture Avatar Selector */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
+              <label className="block text-xs font-medium text-slate-300 mb-2">
+                Profile Avatar Picture
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="relative group shrink-0">
+                  <img
+                    src={avatarUrl}
+                    alt="Current avatar"
+                    className="w-14 h-14 rounded-full border-2 border-indigo-500 object-cover bg-slate-900 shadow-md"
+                  />
+                  <label
+                    htmlFor="settings-avatar-upload"
+                    className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition text-white"
+                    title="Upload photo"
+                  >
+                    <Camera className="w-5 h-5" />
+                  </label>
+                  <input
+                    id="settings-avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {PRESET_AVATARS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setAvatarUrl(preset.svgDataUri)}
+                        title={preset.name}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center transition border ${
+                          avatarUrl === preset.svgDataUri
+                            ? "border-indigo-400 scale-110 shadow-md shadow-indigo-500/50"
+                            : "border-slate-700 hover:border-slate-500 opacity-80 hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          src={preset.svgDataUri}
+                          alt={preset.name}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      </button>
+                    ))}
+                    <label
+                      htmlFor="settings-avatar-upload"
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300 flex items-center gap-1.5 cursor-pointer transition font-medium"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>Upload Photo</span>
+                    </label>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1.5">
+                    Click a preset persona or upload any PNG/JPEG image (&lt;2MB).
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Name Fields: First Name & Last Name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">First Name</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => {
+                      setFirstName(e.target.value);
+                      setFullName(`${e.target.value} ${lastName}`.trim());
+                    }}
+                    placeholder="e.g. Ravi"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Last Name</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      setFullName(`${firstName} ${e.target.value}`.trim());
+                    }}
+                    placeholder="e.g. Kundu"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Full Name & Designation */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Full Display Name
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Ravi Kundu"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Professional Designation
+                </label>
+                <div className="relative">
+                  <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={designation}
+                    onChange={(e) => setDesignation(e.target.value)}
+                    placeholder="e.g. Principal Enterprise Architect"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Email & Username */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Username</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    disabled
+                    value={user?.username || ""}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Corporate Email</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    disabled
+                    value={user?.email || ""}
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Optional Phone Number with Country Code */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-300">Phone Number</label>
+                <span className="text-[10px] text-slate-500 font-normal">Optional</span>
+              </div>
+              <div className="flex gap-2">
+                <div className="w-36 shrink-0 relative">
+                  <select
+                    value={phoneCountryCode}
+                    onChange={(e) => setPhoneCountryCode(e.target.value)}
+                    className="w-full px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.id} value={c.code} className="bg-slate-900 text-white">
+                        {c.flag} {c.code} ({c.id})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                <div className="flex-1 relative">
+                  <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. (555) 234-5678"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Company & Timezone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Company / Organization
+                </label>
+                <div className="relative">
+                  <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder="e.g. Enterprise Cloud Systems"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Timezone</label>
+                <div className="relative">
+                  <Globe className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz.value} value={tz.value} className="bg-slate-900 text-white">
+                        {tz.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Professional Bio */}
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Professional Bio & Architectural Specialization
+              </label>
+              <textarea
+                rows={3}
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                placeholder="Describe your architecture specialty, e.g. Enterprise microservices, event-driven designs, high availability..."
+                className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+              />
+            </div>
           </div>
         )}
 
-        <div className="space-y-5 text-sm">
-          {/* Provider Selection */}
+        {/* TAB 2: AI & SECURITY VAULT */}
+        {activeTab === "ai" && (
+          <div className="space-y-5 text-sm animate-in fade-in">
+            {feedbackMsg && (
+              <div
+                className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                  feedbackMsg.type === "success"
+                    ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
+                    : "bg-red-950/40 border-red-800/60 text-red-300"
+                }`}
+              >
+                {feedbackMsg.type === "success" ? (
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                )}
+                <span>{feedbackMsg.text}</span>
+              </div>
+            )}
+
+            {/* Provider Selection */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
               Select AI Engine
@@ -515,6 +959,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </p>
           </div>
         </div>
+        )}
 
         {/* Sticky Footer Actions */}
         <div className="sticky bottom-0 bg-slate-900 pt-3 mt-4 border-t border-slate-800 flex items-center justify-end gap-2.5 z-10">
@@ -524,14 +969,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
-          >
-            <Check className="w-4 h-4" />
-            <span>{isSaving ? "Encrypting & Saving..." : "Save Configuration"}</span>
-          </button>
+          {activeTab === "profile" ? (
+            <button
+              onClick={handleSaveProfile}
+              disabled={isSavingProfile || !isAuthenticated}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSavingProfile ? "Saving Profile..." : "Save Profile Settings"}</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSaving ? "Encrypting & Saving..." : "Save Configuration"}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

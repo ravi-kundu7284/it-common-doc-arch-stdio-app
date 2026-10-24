@@ -28,6 +28,9 @@ import {
   dbDeleteAdr,
   dbSaveReview,
   dbGetLatestReview,
+  dbCreateUser,
+  dbFindUser,
+  dbUpdateUserProfile,
 } from "../src/lib/supabase.ts";
 
 test("Database: Project CRUD operations", async () => {
@@ -297,4 +300,50 @@ test("Database: Architecture Quality Reviews", async () => {
   assert.ok(latest);
   assert.strictEqual(latest.overall_score, 92);
   assert.strictEqual(latest.findings.length, 1);
+});
+
+test("Database: User profile creation, avatar, and profile settings persistence", async () => {
+  const testUser = {
+    username: "ravi_profile_tester",
+    email: "ravi_tester@enterprise.com",
+    password_hash: "hash123",
+    password_salt: "salt123",
+    first_name: "Ravi",
+    last_name: "Kundu",
+    full_name: "Ravi Kundu",
+    phone: "9876543210",
+    phone_country_code: "+91",
+    avatar_url: "data:image/svg+xml;utf8,<svg></svg>",
+    company: "Enterprise Cloud Tech",
+    timezone: "Asia/Kolkata",
+    bio: "Principal Enterprise Architect for High-Scale Cloud Systems",
+    designation: "Principal Enterprise Architect",
+    role: "architect",
+  };
+
+  const created = await dbCreateUser(testUser);
+  assert.ok(created.id);
+  assert.strictEqual(created.username, "ravi_profile_tester");
+  assert.strictEqual(created.first_name, "Ravi");
+  assert.strictEqual(created.last_name, "Kundu");
+  assert.strictEqual(created.full_name, "Ravi Kundu");
+  assert.strictEqual(created.phone, "9876543210");
+  assert.strictEqual(created.phone_country_code, "+91");
+  assert.strictEqual(created.avatar_url, "data:image/svg+xml;utf8,<svg></svg>");
+  assert.strictEqual(created.company, "Enterprise Cloud Tech");
+  assert.strictEqual(created.timezone, "Asia/Kolkata");
+  assert.strictEqual(created.bio, "Principal Enterprise Architect for High-Scale Cloud Systems");
+
+  // Test profile update
+  const updated = await dbUpdateUserProfile(created.id, {
+    bio: "Updated Chief Architect specialized in Microservices and Resilience",
+    company: "NextGen Global Systems",
+    phone: "1234567890",
+  });
+
+  assert.ok(updated);
+  assert.strictEqual(updated.bio, "Updated Chief Architect specialized in Microservices and Resilience");
+  assert.strictEqual(updated.company, "NextGen Global Systems");
+  assert.strictEqual(updated.phone, "1234567890");
+  assert.strictEqual(updated.first_name, "Ravi");
 });

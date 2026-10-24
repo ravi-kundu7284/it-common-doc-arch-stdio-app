@@ -32,4 +32,7 @@
     <!-- 008: Architecture Artifacts (Projects, Sections, Revisions, Diagrams, Workflows, Requirements, ADRs, Audits) -->
     <include file="changesets/008-create-architecture-artifacts.sql" relativeToChangelogFile="true"/>
 
+    <!-- 009: Add Profile Fields (First/Last Name, Phone, Avatar, Company, Timezone, Bio) -->
+    <include file="changesets/009-add-profile-fields-to-app-users.sql" relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

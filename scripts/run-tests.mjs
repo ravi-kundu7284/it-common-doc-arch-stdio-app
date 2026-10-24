@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+process.env.NODE_ENV = "test";
+
 const testsDir = path.resolve(process.cwd(), "tests");
 
 function findTestFiles(dir) {
