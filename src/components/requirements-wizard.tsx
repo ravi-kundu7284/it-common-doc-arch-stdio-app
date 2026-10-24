@@ -219,6 +219,10 @@ export const RequirementsWizard: React.FC = () => {
     setSelectedDocs(ALL_CORE_DOCUMENT_TYPES.map((d) => d.type));
   };
 
+  const handleDeselectAllDocs = () => {
+    setSelectedDocs([]);
+  };
+
   const handleSelectRecommendedDocs = () => {
     setSelectedDocs(ALL_CORE_DOCUMENT_TYPES.filter((d) => d.isRecommendedDefault).map((d) => d.type));
   };
@@ -666,11 +670,12 @@ export const RequirementsWizard: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-xs flex-wrap">
                     <button
                       type="button"
                       onClick={handleSelectRecommendedDocs}
                       className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                      title="Select standard recommended architecture document set"
                     >
                       Recommended Default
                     </button>
@@ -678,8 +683,17 @@ export const RequirementsWizard: React.FC = () => {
                       type="button"
                       onClick={handleSelectAllDocs}
                       className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                      title="Select all 17 architecture documents"
                     >
                       Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeselectAllDocs}
+                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 hover:border-rose-800/60 border border-slate-700 text-slate-400 font-semibold transition"
+                      title="Deselect all documents"
+                    >
+                      Deselect All
                     </button>
                   </div>
                 </div>
@@ -739,10 +753,16 @@ export const RequirementsWizard: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleApproveAndGenerate}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-emerald-600/30"
+                    disabled={selectedDocs.length === 0}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-emerald-600/30 disabled:opacity-40 disabled:hover:bg-emerald-600 disabled:cursor-not-allowed"
+                    title={selectedDocs.length === 0 ? "Select at least 1 document to generate" : `Generate ${selectedDocs.length} technical architecture documents`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Approve & Generate {selectedDocs.length} Documents</span>
+                    <span>
+                      {selectedDocs.length === 0
+                        ? "Select Documents to Generate"
+                        : `Approve & Generate ${selectedDocs.length} Document${selectedDocs.length > 1 ? "s" : ""}`}
+                    </span>
                   </button>
                 </div>
               </div>
