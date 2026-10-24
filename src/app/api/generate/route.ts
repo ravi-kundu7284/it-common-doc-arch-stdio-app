@@ -38,6 +38,17 @@ export async function POST(req: NextRequest) {
     let modelName = apiSettings?.modelName || process.env.OPENAI_MODEL || "gpt-4o";
     let apiKey = apiSettings?.apiKey || "";
 
+    // Normalize modelName if it belongs to another provider family
+    if (provider === "openai" || provider === "builtin") {
+      if (!modelName || modelName.toLowerCase().includes("gemini") || modelName.toLowerCase().includes("claude")) {
+        modelName = process.env.OPENAI_MODEL || "gpt-4o";
+      }
+    } else if (provider === "gemini") {
+      if (!modelName || modelName.toLowerCase().includes("gpt")) {
+        modelName = "gemini-1.5-pro";
+      }
+    }
+
     // 1. Look up user's encrypted key in DB or session cookie if not passed directly
     if (!apiKey) {
       const sessionCookie = req.cookies.get("docarch_session")?.value;
@@ -79,6 +90,12 @@ export async function POST(req: NextRequest) {
               );
               provider = userConfig.provider || provider;
               modelName = userConfig.model_name || modelName;
+              if (
+                (provider === "openai" || provider === "builtin") &&
+                (modelName.toLowerCase().includes("gemini") || modelName.toLowerCase().includes("claude"))
+              ) {
+                modelName = process.env.OPENAI_MODEL || "gpt-4o";
+              }
             } catch (e) {
               console.warn("Could not decrypt user API key:", e);
             }

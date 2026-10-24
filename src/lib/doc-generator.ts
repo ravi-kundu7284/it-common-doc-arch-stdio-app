@@ -1798,6 +1798,355 @@ A two-week contingency buffer is reserved prior to general availability cutover.
   ];
 }
 
+export function generateTestingDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, requirements } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { targetScale, nonFunctionalRequirements } = requirements;
+
+  return [
+    {
+      id: "test-strategy",
+      title: "1. Quality Objectives & Test Pyramid Strategy",
+      level: "common",
+      phase: "Quality Engineering",
+      contentMarkdown: `## 1. Quality Objectives & Test Pyramid Strategy
+
+### 1.1 Quality Philosophy
+The **${title}** quality assurance strategy follows the classic **Test Pyramid**, ensuring that defects are caught early in the development lifecycle with fast feedback loops.
+
+\`\`\`mermaid
+flowchart TD
+    E2E["End-to-End Tests (10%)<br/>Playwright / Cypress user journeys"]
+    Integration["Integration & Contract Tests (20%)<br/>Pact, Testcontainers, Supertest"]
+    Unit["Automated Unit Tests (70%)<br/>Jest, Vitest, Go Test, PyTest"]
+
+    E2E --> Integration --> Unit
+\`\`\`
+
+### 1.2 Target Quality Metrics & SLAs
+| Quality Dimension | Target SLA / Metric | Measurement Tool | CI/CD Gate Enforcement |
+| :--- | :--- | :--- | :--- |
+| **Unit Test Coverage** | >= 85% branch coverage | Istanbul / Cobertura | Blocking CI merge |
+| **API Integration Passing** | 100% regression suite | Postman / Newman / Supertest | Blocking release candidate |
+| **Latency Benchmark** | p95 < ${nonFunctionalRequirements.latency} | k6 / Artillery | Automated performance gate |
+| **Availability SLA** | ${nonFunctionalRequirements.availability} target | Synthetic health probes | Continuous Canary monitoring |
+`,
+    },
+    {
+      id: "test-unit-integration",
+      title: "2. Automated Unit, Component & Contract Testing",
+      level: "common",
+      phase: "Quality Engineering",
+      contentMarkdown: `## 2. Automated Unit, Component & Contract Testing
+
+### 2.1 Scope & Test Boundaries
+- **Unit Testing:** Validates business domain logic in isolation with mock dependencies.
+- **Component Testing:** Tests state machines, serializers, validation logic, and error handlers.
+- **API Contract Testing:** Consumer-Driven Contract (CDC) testing to ensure breaking schema changes never reach clients.
+
+### 2.2 Test Matrix
+| Layer | Framework | Mocking Strategy | Execution Frequency |
+| :--- | :--- | :--- | :--- |
+| **Domain Logic** | Vitest / Jest | In-memory mocks | Every commit / PR |
+| **Data Persistence** | Testcontainers (PostgreSQL) | Ephemeral real DB | Pre-merge pull request |
+| **Cache & Sessions** | Testcontainers (Redis) | Ephemeral Redis node | Pre-merge pull request |
+| **HTTP API Endpoints** | Supertest / Hurl | Mock external third parties | Pre-merge pull request |
+`,
+    },
+    {
+      id: "test-perf-load",
+      title: "3. Performance, Scalability & Load Testing",
+      level: "common",
+      phase: "Quality Engineering",
+      contentMarkdown: `## 3. Performance, Scalability & Load Testing
+
+### 3.1 Load & Stress Test Profile
+- **Target Concurrency:** Peak throughput of **${targetScale.rps} RPS** sustained across **${targetScale.users}**.
+- **Stress Horizon:** 2.5x peak load (${targetScale.rps * 2.5} RPS) to verify graceful degradation and circuit breaking.
+- **Soak Testing:** 24-hour endurance test at 70% peak load to detect memory leaks and connection pool starvation.
+
+### 3.2 Load Testing Script Specification (k6)
+\`\`\`javascript
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export const options = {
+  stages: [
+    { duration: '2m', target: ${Math.round(targetScale.rps * 0.5)} }, // Ramp-up
+    { duration: '5m', target: ${targetScale.rps} },                    // Peak load
+    { duration: '2m', target: 0 },                                     // Scale-down
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<${parseInt(nonFunctionalRequirements.latency) || 150}'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
+
+export default function () {
+  const res = http.get('https://staging-api.${title.toLowerCase().replace(/[^a-z0-9]/g, "")}.internal/health');
+  check(res, { 'status is 200': (r) => r.status === 200 });
+  sleep(1);
+}
+\`\`\`
+`,
+    },
+    {
+      id: "test-security-qa",
+      title: "4. Security Vulnerability Gates & Acceptance Criteria",
+      level: "common",
+      phase: "Quality Engineering",
+      contentMarkdown: `## 4. Security Vulnerability Gates & Acceptance Criteria
+
+### 4.1 Automated Security Testing (SecOps)
+- **SAST (Static Application Security Testing):** SonarQube scanning for OWASP Top 10 vulnerabilities (zero blocker or critical issues permitted).
+- **Dependency Scanning:** Dependabot / Snyk scanning for known CVEs in transitive dependencies.
+- **DAST (Dynamic Analysis):** OWASP ZAP automated penetration scan in staging environment.
+
+### 4.2 Definition of Done (DoD) & Acceptance Sign-off
+1. All unit and integration test suites pass in CI.
+2. Code coverage meets or exceeds 85% requirement.
+3. No critical or high security vulnerabilities reported by scanners.
+4. Load test validates ${targetScale.rps} RPS throughput under ${nonFunctionalRequirements.latency} p95 SLA.
+`,
+    },
+  ];
+}
+
+export function generateCicdDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { stack } = recommendations;
+
+  return [
+    {
+      id: "cicd-architecture",
+      title: "1. CI/CD Architecture & Multi-Stage Pipelines",
+      level: "hld",
+      phase: "CI/CD Engineering",
+      contentMarkdown: `## 1. CI/CD Architecture & Multi-Stage Pipelines
+
+\`\`\`mermaid
+flowchart LR
+    Push["Git Push / PR"] --> Lint["Lint & Typecheck"]
+    Lint --> Unit["Unit & Contract Tests"]
+    Unit --> Scan["Trivy / Snyk Security Scan"]
+    Scan --> Build["Container Build & Sign"]
+    Build --> Staging["Staging Deployment"]
+    Staging --> Integration["Integration & Smoke Tests"]
+    Integration --> Prod["Production Canary Rollout"]
+\`\`\`
+
+### 1.1 Automation Principles
+- **Immutable Artifacts:** Docker container images built once and promoted through environments.
+- **Trunk-Based Development:** Short-lived feature branches merged frequently to main.
+- **Automated Rollback:** Health check failure triggers automatic canary rollback in < 60s.
+`,
+    },
+    {
+      id: "cicd-quality-gates",
+      title: "2. Quality & Security Gates Enforcement",
+      level: "hld",
+      phase: "CI/CD Engineering",
+      contentMarkdown: `## 2. Quality & Security Gates Enforcement
+
+| Pipeline Stage | Tooling | Gate Failure Condition |
+| :--- | :--- | :--- |
+| **Static Analysis** | ESLint / Biome / TypeScript | Any syntax or typing error |
+| **Unit Testing** | Vitest / Jest | Test failure or branch coverage < 85% |
+| **Container Scanning** | Trivy / Aqua Security | Any Critical or High severity CVE |
+| **Secret Detection** | Gitleaks / TruffleHog | Detection of API keys or private tokens |
+`,
+    },
+    {
+      id: "cicd-deployment-strategies",
+      title: "3. Deployment Strategies: Canary, Blue/Green & GitOps",
+      level: "hld",
+      phase: "CI/CD Engineering",
+      contentMarkdown: `## 3. Deployment Strategies: Canary, Blue/Green & GitOps
+
+### 3.1 Progressive Traffic Shifting
+- **Step 1:** Canary pod receives 10% of ingress production traffic for 5 minutes.
+- **Step 2:** Telemetry monitors HTTP 5xx rate (< 0.1%) and p95 latency (< 150ms).
+- **Step 3:** If healthy, traffic increases to 50%, then 100% full cutover.
+`,
+    },
+    {
+      id: "cicd-rollback-governance",
+      title: "4. Rollback Protocols & Release Governance",
+      level: "hld",
+      phase: "CI/CD Engineering",
+      contentMarkdown: `## 4. Rollback Protocols & Release Governance
+
+### 4.1 Automated Rollback Triggers
+- Ingress HTTP 5xx error spike > 1.0% within a 2-minute rolling window.
+- Application crash-loop backoff detected by orchestrator.
+- Database connection failure rate > 5%.
+`,
+    },
+  ];
+}
+
+export function generateIntegrationDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { stack } = recommendations;
+
+  return [
+    {
+      id: "integration-landscape",
+      title: "1. Third-Party Integration Landscape & Gateways",
+      level: "hld",
+      phase: "Integration Architecture",
+      contentMarkdown: `## 1. Third-Party Integration Landscape & Gateways
+
+\`\`\`mermaid
+flowchart TD
+    Core["${title} Core Services"] --> Auth["OAuth2 / OIDC Identity Provider"]
+    Core --> Pay["Payment Gateway (Stripe / Razorpay)"]
+    Core --> SMS["SMS & Push Notification Gateway"]
+    Core --> Storage["Cloud Object Storage (S3 / GCS)"]
+    Core --> SIEM["Enterprise SIEM & Telemetry Collector"]
+\`\`\`
+
+### 1.1 External Dependency Matrix
+| Integration | Protocol | Authentication | Failure Fallback |
+| :--- | :--- | :--- | :--- |
+| **Identity Provider** | HTTPS OIDC | Bearer JWT | Cached JWKS public keys |
+| **Payment Processor** | HTTPS REST | API Secret + Webhook HMAC | Asynchronous Dead-Letter Queue |
+| **Notification Services** | HTTPS / Webhooks | HMAC SHA-256 | Secondary SMS provider fallback |
+`,
+    },
+    {
+      id: "integration-async-events",
+      title: "2. Asynchronous Event Bus & Webhook Contracts",
+      level: "hld",
+      phase: "Integration Architecture",
+      contentMarkdown: `## 2. Asynchronous Event Bus & Webhook Contracts
+
+### 2.1 Webhook Delivery Guarantees
+- **At-Least-Once Delivery:** Events published to \`${stack.messaging}\` with exponential retry backoff.
+- **Payload Signing:** Webhooks signed using HMAC SHA-256 in \`X-Signature-SHA256\` header.
+- **Idempotent Consumption:** Consumers deduplicate incoming events using unique event IDs.
+`,
+    },
+    {
+      id: "integration-circuit-breakers",
+      title: "3. Circuit Breakers, Bulkheads & Timeout Policies",
+      level: "hld",
+      phase: "Integration Architecture",
+      contentMarkdown: `## 3. Circuit Breakers, Bulkheads & Timeout Policies
+
+### 3.1 Resilience Parameters
+- **Connection Timeout:** 3,000ms.
+- **Read Timeout:** 5,000ms.
+- **Circuit Breaker Threshold:** 5 consecutive failures trip breaker to OPEN state for 30 seconds.
+- **Half-Open Probe:** Single test probe allowed after cooldown to verify upstream recovery.
+`,
+    },
+    {
+      id: "integration-idempotency",
+      title: "4. Data Synchronization & Replay Semantics",
+      level: "hld",
+      phase: "Integration Architecture",
+      contentMarkdown: `## 4. Data Synchronization & Replay Semantics
+
+### 4.1 Event Replay Facility
+In the event of downstream consumer outage, unacknowledged messages remain queued in the Dead Letter Queue (DLQ) for up to 14 days, allowing operations to trigger replayed batch processing once the target service recovers.
+`,
+    },
+  ];
+}
+
+export function generateAdrsDocument(
+  projectData: Omit<DesignDocProject, "documentSections">
+): DocumentSection[] {
+  const { metadata, recommendations } = projectData;
+  const title = metadata?.title || "System Architecture";
+  const { selectedPattern, stack } = recommendations;
+
+  return [
+    {
+      id: "adr-governance",
+      title: "1. Architecture Decision Governance & MADR Protocol",
+      level: "common",
+      phase: "ADR Governance",
+      contentMarkdown: `## 1. Architecture Decision Governance & MADR Protocol
+
+### 1.1 Decision Protocol
+Architecture decisions for **${title}** are documented using the **Markdown Architectural Decision Records (MADR)** standard.
+All significant decisions affecting technology choices, system boundaries, security posture, and data integrity require an approved ADR before implementation.
+
+### 1.2 ADR Status Lifecycle
+\`\`\`mermaid
+stateDiagram-v2
+    [*] --> Proposed
+    Proposed --> Accepted: ARB Approval
+    Proposed --> Rejected: ARB Rejection
+    Accepted --> Superseded: Replaced by newer ADR
+    Accepted --> Deprecated: Feature retired
+\`\`\`
+`,
+    },
+    {
+      id: "adr-core-records",
+      title: "2. Core System Architecture Decision Records",
+      level: "common",
+      phase: "ADR Governance",
+      contentMarkdown: `## 2. Core System Architecture Decision Records
+
+### ADR-001: Selection of ${selectedPattern} Architecture
+- **Status:** Accepted
+- **Context:** System requires high resilience, clear bounded contexts, and maintainable operations.
+- **Decision:** Adopt **${selectedPattern}** pattern to balance development velocity with scalability.
+- **Consequences:** Modular service boundaries, clear contract interfaces, and independent deployment capability.
+
+### ADR-002: Primary Persistence on ${stack.database}
+- **Status:** Accepted
+- **Context:** Transactional financial operations and member records require ACID compliance and JSONB flexibility.
+- **Decision:** Utilize **${stack.database}** with streaming replication.
+- **Consequences:** Guaranteed consistency, point-in-time recovery, and horizontal read scaling.
+
+### ADR-003: Ephemeral Caching on ${stack.caching}
+- **Status:** Accepted
+- **Context:** Sub-millisecond session validation and rate limit enforcement.
+- **Decision:** Deploy distributed in-memory **${stack.caching}** cluster.
+- **Consequences:** Reduced database query load by 80% for read-heavy authentication lookups.
+`,
+    },
+    {
+      id: "adr-tradeoffs",
+      title: "3. Trade-off Analysis & Alternatives Considered",
+      level: "common",
+      phase: "ADR Governance",
+      contentMarkdown: `## 3. Trade-off Analysis & Alternatives Considered
+
+| Decision Area | Chosen Approach | Rejected Alternative | Key Reason for Rejection |
+| :--- | :--- | :--- | :--- |
+| **Compute Topology** | Containerized Auto-scaling (${stack.devops}) | Bare-metal VMs | Lack of automated elasticity and slower scaling. |
+| **Database Engine** | Relational (${stack.database}) | Pure NoSQL Document Store | Lack of multi-table ACID transaction guarantees. |
+| **Messaging Layer** | Distributed Broker (${stack.messaging}) | Synchronous HTTP chaining | High coupling and cascading failure risk under peak load. |
+`,
+    },
+    {
+      id: "adr-lifecycle",
+      title: "4. Review Cadence & Supersession Tracking",
+      level: "common",
+      phase: "ADR Governance",
+      contentMarkdown: `## 4. Review Cadence & Supersession Tracking
+
+### 4.1 ARB Review Cadence
+The Architecture Review Board convenes bi-weekly to review proposed ADRs. Accepted ADRs are signed off by the Lead Solutions Architect and SecOps Lead.
+`,
+    },
+  ];
+}
+
 /**
  * Dispatcher to generate sections for any requested DocumentType.
  */
@@ -1832,10 +2181,14 @@ export function generateDocumentByType(
       return generateRaidDocument(projectData);
     case "roadmap":
       return generateRoadmapDocument(projectData);
-    case "adrs":
-    case "integration":
-    case "cicd":
     case "testing":
+      return generateTestingDocument(projectData);
+    case "cicd":
+      return generateCicdDocument(projectData);
+    case "integration":
+      return generateIntegrationDocument(projectData);
+    case "adrs":
+      return generateAdrsDocument(projectData);
     default:
       return generateStandardDocument(projectData, "hld");
   }
@@ -1851,7 +2204,25 @@ export function generateFullDocumentSet(
   const typesToGenerate: DocumentType[] =
     selectedTypes && selectedTypes.length > 0
       ? selectedTypes
-      : ["overview", "brd", "srs", "hld", "lld", "sad", "database", "api", "security", "deployment", "runbook", "raid", "roadmap"];
+      : [
+          "overview",
+          "brd",
+          "srs",
+          "hld",
+          "lld",
+          "sad",
+          "adrs",
+          "database",
+          "api",
+          "integration",
+          "security",
+          "deployment",
+          "cicd",
+          "testing",
+          "runbook",
+          "raid",
+          "roadmap",
+        ];
 
   const now = new Date().toISOString();
 

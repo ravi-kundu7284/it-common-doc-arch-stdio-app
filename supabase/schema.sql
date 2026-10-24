@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS dev.user_ai_configurations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES dev.app_users(id) ON DELETE CASCADE,
     provider VARCHAR(30) NOT NULL DEFAULT 'builtin', -- 'builtin' | 'gemini' | 'openai' | 'anthropic'
-    model_name VARCHAR(50) NOT NULL DEFAULT 'gemini-1.5-pro',
+    model_name VARCHAR(50) NOT NULL DEFAULT 'gpt-4o',
     encrypted_api_key TEXT,                          -- AES-256-GCM ciphertext
     key_iv TEXT,                                     -- 12-byte IV in hex
     key_auth_tag TEXT,                               -- GCM Authentication Tag in hex

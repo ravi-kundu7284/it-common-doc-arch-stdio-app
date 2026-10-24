@@ -20,6 +20,7 @@ import {
   User,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 interface SettingsModalProps {
@@ -54,8 +55,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
   // Sync state when modal opens or user/aiConfig changes
   useEffect(() => {
-    setProvider(apiSettings.provider || (aiConfig ? aiConfig.provider : "openai"));
-    setModelName(apiSettings.modelName || (aiConfig ? aiConfig.modelName : "gpt-4o"));
+    if (!isOpen) return;
+    const targetProvider = apiSettings.provider || (aiConfig ? aiConfig.provider : "openai");
+    setProvider(targetProvider);
+
+    let targetModel = apiSettings.modelName || (aiConfig ? aiConfig.modelName : "gpt-4o");
+    // Ensure model matches provider family
+    if (targetProvider === "openai") {
+      if (!targetModel || targetModel.toLowerCase().includes("gemini") || targetModel === "builtin") {
+        targetModel = "gpt-4o";
+      }
+    } else if (targetProvider === "gemini") {
+      if (!targetModel || targetModel.toLowerCase().includes("gpt") || targetModel === "builtin") {
+        targetModel = "gemini-1.5-pro";
+      }
+    }
+    setModelName(targetModel);
     setApiKey(apiSettings.apiKey || "");
     if (aiConfig?.expiresInDays) setExpiresInDays(aiConfig.expiresInDays);
   }, [aiConfig, apiSettings, isOpen]);
@@ -67,18 +82,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     setFeedbackMsg(null);
 
     const effectiveKey = apiKey.trim().length > 0 ? apiKey.trim() : apiSettings.apiKey;
+    let effectiveModel = modelName.trim();
+    if (provider === "openai" && (!effectiveModel || effectiveModel.toLowerCase().includes("gemini"))) {
+      effectiveModel = "gpt-4o";
+    } else if (provider === "gemini" && (!effectiveModel || effectiveModel.toLowerCase().includes("gpt"))) {
+      effectiveModel = "gemini-1.5-pro";
+    } else if (!effectiveModel) {
+      effectiveModel = provider === "openai" ? "gpt-4o" : "gemini-1.5-pro";
+    }
 
     // Save in client doc store
     setApiSettings({
       provider,
       apiKey: effectiveKey,
-      modelName,
+      modelName: effectiveModel,
     });
 
     // If authenticated, also save and encrypt in Supabase PostgreSQL
     if (isAuthenticated && effectiveKey.length > 0) {
       try {
-        const res = await saveAiConfig(provider, modelName, effectiveKey, expiresInDays);
+        const res = await saveAiConfig(provider, effectiveModel, effectiveKey, expiresInDays);
         if (res.success) {
           setFeedbackMsg({
             type: "success",
@@ -306,6 +329,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                       >
                         gpt-4o-mini
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setModelName("o3-mini")}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                          modelName === "o3-mini"
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        o3-mini
+                      </button>
+                    </div>
+                  )}
+                  {provider === "gemini" && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setModelName("gemini-1.5-pro")}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                          modelName === "gemini-1.5-pro"
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        1.5-pro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModelName("gemini-1.5-flash")}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition ${
+                          modelName === "gemini-1.5-flash"
+                            ? "bg-indigo-600 text-white font-bold"
+                            : "bg-slate-800 text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        1.5-flash
+                      </button>
                     </div>
                   )}
                 </div>
@@ -316,6 +376,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                   placeholder={provider === "openai" ? "gpt-4o" : "gemini-1.5-pro"}
                   className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 font-mono text-xs focus:outline-none focus:border-indigo-500"
                 />
+                {provider === "openai" && modelName.toLowerCase().includes("gemini") && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-amber-950/60 border border-amber-800/80 text-[11px] text-amber-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Google model selected for OpenAI. Reset to gpt-4o?</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setModelName("gpt-4o")}
+                      className="px-2 py-0.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]"
+                    >
+                      Use gpt-4o
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
