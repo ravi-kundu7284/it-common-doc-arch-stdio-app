@@ -813,7 +813,7 @@ export async function dbRecordLoginSuccess(
         })
         .eq("id", userId),
 
-      client.from("app_sessions").insert([
+      client.from("user_sessions").insert([
         {
           user_id: session.user_id,
           session_token: session.session_token,
@@ -887,7 +887,7 @@ export async function dbCreateUser(
   if (error) {
     lastDbError = error.message;
     console.error("Supabase user creation error:", error);
-    return sandboxDb.createUser(user);
+    throw new Error(`Database user creation failed: ${error.message}`);
   }
   return data as AppUser;
 }

@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   dbFindUser,
   dbCreateUser,
   dbCreateSession,
   dbRecordAuditLog,
   getLastDbError,
+  isSupabaseConfigured,
 } from "@/lib/supabase";
 import { hashPassword, createSessionToken } from "@/lib/crypto";
 import { getClientIp } from "@/lib/rate-limit";
@@ -18,6 +19,18 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { username, email, password, fullName, designation } = body;
+
+    // Check database connection configuration
+    if (!isSupabaseConfigured() && process.env.NODE_ENV !== "test") {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Database connection is unconfigured on the server. Please configure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your hosting environment (Cloudflare Pages / .env.local) to persist accounts to PostgreSQL.",
+        },
+        { status: 503 }
+      );
+    }
 
     // Validation
     if (!username || username.trim().length < 3) {
@@ -67,24 +80,35 @@ export async function POST(req: NextRequest) {
     // Hash password with unique PBKDF2 salt
     const { hash, salt } = await hashPassword(password);
 
-    const newUser = await dbCreateUser({
-      username: username.trim(),
-      email: email.trim().toLowerCase(),
-      password_hash: hash,
-      password_salt: salt,
-      full_name: fullName || username,
-      designation: designation || "Software Architect",
-      role: "architect",
-    });
-
-    const dbErr = getLastDbError();
-    if (dbErr && !newUser.id) {
+    let newUser;
+    try {
+      newUser = await dbCreateUser({
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        password_hash: hash,
+        password_salt: salt,
+        full_name: fullName || username,
+        designation: designation || "Software Architect",
+        role: "architect",
+      });
+    } catch (dbErr: any) {
+      console.error("Registration database error:", dbErr);
       return NextResponse.json(
         {
           success: false,
-          error: `Database connection error: ${dbErr}. Check your Supabase configuration or visit /api/db/health.`,
+          error: `Database error: ${dbErr?.message || "Failed to save user in PostgreSQL"}. Check your Supabase configuration or visit /api/db/health.`,
         },
-        { status: 503 }
+        { status: 500 }
+      );
+    }
+
+    if (!newUser || !newUser.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database error: Failed to create user account.",
+        },
+        { status: 500 }
       );
     }
 
