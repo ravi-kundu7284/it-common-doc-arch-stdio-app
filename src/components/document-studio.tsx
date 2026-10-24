@@ -48,7 +48,9 @@ import {
   Search,
   AlertTriangle,
   Settings,
+  FileCheck,
 } from "lucide-react";
+import { getDocumentTitle } from "@/lib/doc-generator";
 import {
   generateStandaloneHtml,
   generateRawMarkdown,
@@ -368,12 +370,19 @@ export const DocumentStudio: React.FC = () => {
   const activeSection =
     documentSections.find((s) => s.id === selectedSectionId) || documentSections[0];
 
+  const currentDocItem = currentProject.documents?.find(
+    (d) => d.type === activeDocumentType || d.id === currentProject.activeDocumentId
+  );
+  const activeDocTitle =
+    currentDocItem?.title || getDocumentTitle(activeDocumentType === "all" ? "hld" : activeDocumentType);
+
   const [editorText, setEditorText] = useState(activeSection?.contentMarkdown || "");
   const [aiInstruction, setAiInstruction] = useState("");
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [aiError, setAiError] = useState<{ code?: string; message: string } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
   const [showSectionList, setShowSectionList] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<"sections" | "documents">("sections");
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [rightPanelTab, setRightPanelTab] = useState<"ai" | "lifecycle" | "stats">("ai");
   const [searchQuery, setSearchQuery] = useState("");
@@ -418,7 +427,7 @@ export const DocumentStudio: React.FC = () => {
     if (activeSection && editorText !== activeSection.contentMarkdown) {
       setEditorText(activeSection.contentMarkdown);
     }
-  }, [activeSection?.id]);
+  }, [activeSection?.id, activeSection?.contentMarkdown]);
 
   const handleSelectSection = (sectionId: string) => {
     setSelectedSectionId(sectionId);
@@ -749,9 +758,6 @@ export const DocumentStudio: React.FC = () => {
   const wordCount = fullDocumentMarkdown.split(/\s+/).filter(Boolean).length;
   const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 200));
 
-  const currentDocItem = (currentProject.documents || []).find(
-    (d) => d.id === currentProject.activeDocumentId || d.type === activeDocumentType
-  );
   const currentStatus: DocumentLifecycleStatus = currentDocItem?.status || "draft";
 
   return (
@@ -1096,6 +1102,47 @@ export const DocumentStudio: React.FC = () => {
         </div>
       </div>
 
+      {/* Document Suite Horizontal Strip: 1-Click access to all generated checklist documents */}
+      {currentProject.documents && currentProject.documents.length > 0 && (
+        <div className="w-full px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-400 font-semibold shrink-0 pr-2.5 border-r border-slate-800">
+            <FileStack className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline font-bold">Document Suite ({currentProject.documents.length}):</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-1 overflow-x-auto no-scrollbar py-0.5">
+            {currentProject.documents.map((doc) => {
+              const isActiveDoc = doc.type === activeDocumentType || doc.id === currentProject.activeDocumentId;
+              return (
+                <button
+                  key={doc.id || doc.type}
+                  type="button"
+                  onClick={() => {
+                    setActiveDocumentType(doc.type);
+                    setSidebarTab("sections");
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition border shrink-0 ${
+                    isActiveDoc
+                      ? "bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 font-bold ring-1 ring-indigo-400/40"
+                      : "bg-slate-950/80 hover:bg-slate-800/80 text-slate-300 hover:text-white border-slate-800/80"
+                  }`}
+                  title={`Switch to ${doc.title} (${doc.sections?.length || 0} sections)`}
+                >
+                  <span className="truncate max-w-[200px] sm:max-w-none">{doc.title}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                      isActiveDoc ? "bg-indigo-800 text-indigo-100" : "bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {doc.sections?.length || 0}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Main Studio Body */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden relative pb-14 md:pb-0">
         {/* Mobile Backdrop Overlay */}
@@ -1109,21 +1156,47 @@ export const DocumentStudio: React.FC = () => {
         {/* SIDEBAR: Sections List (Collapsible on Desktop, Off-canvas Drawer on Mobile) */}
         {showSectionList && (
           <aside className="fixed inset-y-16 left-0 z-30 w-72 sm:w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 shadow-2xl md:relative md:inset-y-0 md:z-auto md:shadow-none md:bg-slate-900/70">
-            {/* Sidebar Top: Section Filter, Search and Add Button */}
+            {/* Sidebar Top: Switch between Sections and Document Suite */}
             <div className="p-2.5 border-b border-slate-800 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold uppercase tracking-wider text-slate-400 text-[11px]">
-                  Document Sections ({documentSections.length})
-                </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-semibold">
                   <button
-                    onClick={() => openAddModal("end")}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold border border-indigo-500/30 transition"
-                    title="Add New Custom Section (Start, Mid, or End)"
+                    type="button"
+                    onClick={() => setSidebarTab("sections")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${
+                      sidebarTab === "sections"
+                        ? "bg-indigo-600 text-white shadow-sm font-bold"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add</span>
+                    <ListOrdered className="w-3.5 h-3.5" />
+                    <span>Sections ({documentSections.length})</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab("documents")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${
+                      sidebarTab === "documents"
+                        ? "bg-indigo-600 text-white shadow-sm font-bold"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    <FileStack className="w-3.5 h-3.5" />
+                    <span>Docs ({currentProject.documents?.length || 1})</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {sidebarTab === "sections" && (
+                    <button
+                      onClick={() => openAddModal("end")}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold border border-indigo-500/30 transition"
+                      title="Add New Custom Section (Start, Mid, or End)"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowSectionList(false)}
                     className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 md:hidden"
@@ -1134,88 +1207,173 @@ export const DocumentStudio: React.FC = () => {
                 </div>
               </div>
 
+              {/* Active Document Indicator with Quick Switcher button */}
+              {sidebarTab === "sections" && (
+                <div className="p-2 rounded-xl bg-slate-950/80 border border-indigo-900/40 flex items-center justify-between gap-2">
+                  <div className="truncate">
+                    <span className="text-[10px] uppercase font-bold text-indigo-400 block tracking-wider">
+                      Active Document
+                    </span>
+                    <span className="text-xs font-semibold text-slate-200 truncate block">
+                      {activeDocTitle}
+                    </span>
+                  </div>
+                  {currentProject.documents && currentProject.documents.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab("documents")}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-indigo-950 border border-indigo-700/60 text-indigo-300 hover:bg-indigo-800 hover:text-white transition shrink-0"
+                    >
+                      Switch Doc ▾
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Search Box */}
               <div className="relative">
                 <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
                 <input
                   type="text"
-                  placeholder="Filter sections..."
+                  placeholder={sidebarTab === "sections" ? "Filter sections..." : "Filter documents..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              {/* Filter Tabs */}
-              <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-slate-950 text-[10px] font-medium">
-                <button
-                  onClick={() => setSectionFilter("all")}
-                  className={`py-1 rounded text-center transition ${
-                    sectionFilter === "all" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  All ({documentSections.length})
-                </button>
-                <button
-                  onClick={() => setSectionFilter("hld")}
-                  className={`py-1 rounded text-center transition ${
-                    sectionFilter === "hld" ? "bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/40" : "text-slate-400 hover:text-emerald-300"
-                  }`}
-                >
-                  HLD ({hldCount})
-                </button>
-                <button
-                  onClick={() => setSectionFilter("lld")}
-                  className={`py-1 rounded text-center transition ${
-                    sectionFilter === "lld" ? "bg-indigo-950 text-indigo-300 font-bold border border-indigo-800/40" : "text-slate-400 hover:text-indigo-300"
-                  }`}
-                >
-                  LLD ({lldCount})
-                </button>
-              </div>
+              {/* Filter Tabs for Sections */}
+              {sidebarTab === "sections" && (
+                <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-slate-950 text-[10px] font-medium">
+                  <button
+                    onClick={() => setSectionFilter("all")}
+                    className={`py-1 rounded text-center transition ${
+                      sectionFilter === "all" ? "bg-slate-800 text-white font-bold" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    All ({documentSections.length})
+                  </button>
+                  <button
+                    onClick={() => setSectionFilter("hld")}
+                    className={`py-1 rounded text-center transition ${
+                      sectionFilter === "hld" ? "bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/40" : "text-slate-400 hover:text-emerald-300"
+                    }`}
+                  >
+                    HLD ({hldCount})
+                  </button>
+                  <button
+                    onClick={() => setSectionFilter("lld")}
+                    className={`py-1 rounded text-center transition ${
+                      sectionFilter === "lld" ? "bg-indigo-950 text-indigo-300 font-bold border border-indigo-800/40" : "text-slate-400 hover:text-indigo-300"
+                    }`}
+                  >
+                    LLD ({lldCount})
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Quick Add Position Actions */}
-            <div className="px-2.5 py-1.5 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-              <span>Insert at:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => openAddModal("start")}
-                  className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                  title="Add Section at Top of Document"
-                >
-                  Top
-                </button>
-                {activeSection && (
-                  <>
+            {/* Sidebar Content: Document Suite List OR Document Sections List */}
+            {sidebarTab === "documents" ? (
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 flex items-center justify-between">
+                  <span>Document Suite ({currentProject.documents?.length || 1})</span>
+                  <span className="text-slate-500 font-normal">Click to open</span>
+                </div>
+                {(currentProject.documents || []).map((doc) => {
+                  const isActive = doc.type === activeDocumentType || doc.id === currentProject.activeDocumentId;
+                  return (
                     <button
-                      onClick={() => openAddModal("before", activeSection.id)}
-                      className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                      title={`Add Section before "${activeSection.title}"`}
+                      key={doc.id || doc.type}
+                      type="button"
+                      onClick={() => {
+                        setActiveDocumentType(doc.type);
+                        setSidebarTab("sections");
+                      }}
+                      className={`w-full text-left p-3 rounded-xl border transition flex items-start justify-between gap-2.5 ${
+                        isActive
+                          ? "bg-indigo-950/70 border-indigo-500/80 text-white shadow-md ring-1 ring-indigo-500/30"
+                          : "bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/50 hover:border-slate-700 text-slate-300"
+                      }`}
                     >
-                      Before
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-bold ${
+                              isActive ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            {doc.type}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-semibold ${
+                              doc.status === "published"
+                                ? "bg-emerald-950 text-emerald-300 border border-emerald-800/40"
+                                : doc.status === "in_review"
+                                ? "bg-amber-950 text-amber-300 border border-amber-800/40"
+                                : "bg-slate-800 text-slate-400"
+                            }`}
+                          >
+                            {doc.status.replace("_", " ")}
+                          </span>
+                        </div>
+                        <div className="text-xs font-bold truncate text-slate-100">
+                          {doc.title}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                          <span>{doc.sections?.length || 0} sections</span>
+                          <span>&bull;</span>
+                          <span>v{doc.version || "1.0.0"}</span>
+                        </div>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 mt-1 shrink-0 ${isActive ? "text-indigo-400" : "text-slate-600"}`} />
                     </button>
-                    <button
-                      onClick={() => openAddModal("after", activeSection.id)}
-                      className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                      title={`Add Section after "${activeSection.title}"`}
-                    >
-                      After
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={() => openAddModal("end")}
-                  className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                  title="Add Section at End of Document"
-                >
-                  End
-                </button>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <>
+                {/* Quick Add Position Actions */}
+                <div className="px-2.5 py-1.5 bg-slate-950/40 border-b border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Insert at:</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openAddModal("start")}
+                      className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                      title="Add Section at Top of Document"
+                    >
+                      Top
+                    </button>
+                    {activeSection && (
+                      <>
+                        <button
+                          onClick={() => openAddModal("before", activeSection.id)}
+                          className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                          title={`Add Section before "${activeSection.title}"`}
+                        >
+                          Before
+                        </button>
+                        <button
+                          onClick={() => openAddModal("after", activeSection.id)}
+                          className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                          title={`Add Section after "${activeSection.title}"`}
+                        >
+                          After
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => openAddModal("end")}
+                      className="px-1.5 py-0.5 rounded bg-slate-800/60 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                      title="Add Section at End of Document"
+                    >
+                      End
+                    </button>
+                  </div>
+                </div>
 
-            {/* Sections Scrollable List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {/* Sections Scrollable List */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
               {filteredSections.map((sec, idx) => {
                 const isSelected = sec.id === activeSection?.id;
                 const globalIndex = documentSections.findIndex((s) => s.id === sec.id);
@@ -1336,6 +1494,8 @@ export const DocumentStudio: React.FC = () => {
                 );
               })}
             </div>
+            </>
+            )}
 
             {/* Sidebar Bottom Controls */}
             <div className="p-2.5 border-t border-slate-800 space-y-2">
@@ -1631,13 +1791,16 @@ export const DocumentStudio: React.FC = () => {
             <div className="mb-10 pb-8 border-b border-slate-800">
               <div className="flex flex-wrap items-center gap-2 mb-3">
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-950 border border-indigo-700/60 text-indigo-300 uppercase tracking-wider">
-                  Level: {designLevel.toUpperCase()}
+                  Doc: {activeDocumentType?.toUpperCase()}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950 border border-emerald-700/60 text-emerald-300">
                   Pattern: {recommendations.selectedPattern}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300">
-                  v{metadata.version}
+                  v{currentDocItem?.version || metadata.version}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300">
+                  Status: {(currentDocItem?.status || "draft").toUpperCase()}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-300">
                   Domain: {requirements.domain}
@@ -1645,14 +1808,10 @@ export const DocumentStudio: React.FC = () => {
               </div>
 
               <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight mb-2">
-                {metadata.title}
+                {activeDocTitle}
               </h1>
-              <p className="text-sm text-slate-400">
-                {designLevel === "hld"
-                  ? "High-Level Architecture Design & Cloud Topology (HLD)"
-                  : designLevel === "lld"
-                  ? "Low-Level Implementation Specification & Component Design (LLD)"
-                  : "Comprehensive Enterprise Architecture Specification (HLD + LLD)"}
+              <p className="text-sm text-indigo-300/90 font-medium">
+                Project: <span className="text-white font-semibold">{metadata.title}</span> &bull; {currentDocItem ? `${currentDocItem.sections?.length || 0} Sections` : `${documentSections.length} Sections`}
               </p>
 
               {/* Metadata Key-Value Grid */}

@@ -25,7 +25,16 @@ export function resolveServerOpenAiKey(explicitKey?: string): string {
  */
 export function resolveServerOpenAiModel(explicitModel?: string): string {
   if (explicitModel && explicitModel.trim().length > 0) {
-    return explicitModel.trim();
+    const trimmed = explicitModel.trim();
+    // Safety check: OpenAI API cannot execute Gemini or Claude models and rejects them with 404
+    if (
+      trimmed.toLowerCase().includes("gemini") ||
+      trimmed.toLowerCase().includes("claude") ||
+      trimmed.toLowerCase() === "builtin"
+    ) {
+      return process.env.OPENAI_MODEL?.trim() || "gpt-4o";
+    }
+    return trimmed;
   }
   return process.env.OPENAI_MODEL?.trim() || "gpt-4o";
 }

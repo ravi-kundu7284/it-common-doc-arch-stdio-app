@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   dbGetUserAiConfig,
   dbSaveUserAiConfig,
@@ -32,8 +32,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { provider, modelName, apiKey, expiresInDays } = body;
 
-    const selectedProvider = provider || "builtin";
-    const selectedModel = modelName || "gemini-1.5-pro";
+    const selectedProvider = provider || "openai";
+    let selectedModel = modelName?.trim();
+    if (selectedProvider === "openai") {
+      if (!selectedModel || selectedModel.toLowerCase().includes("gemini")) {
+        selectedModel = "gpt-4o";
+      }
+    } else if (selectedProvider === "gemini") {
+      if (!selectedModel || selectedModel.toLowerCase().includes("gpt")) {
+        selectedModel = "gemini-1.5-pro";
+      }
+    } else if (!selectedModel) {
+      selectedModel = "gpt-4o";
+    }
     const validDays = Number(expiresInDays) || 30;
 
     let encryptedData = null;
