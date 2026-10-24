@@ -42,7 +42,7 @@ jobs:
 
       - name: Install PostgreSQL Driver
         run: |
-          liquibase lpm add postgresql --global --skip-existing
+          lpm add postgresql --global --skip-existing || true
 
       - name: Run Liquibase in Dev Schema
         run: |
