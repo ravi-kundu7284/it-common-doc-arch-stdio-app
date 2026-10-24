@@ -22,14 +22,14 @@ export function resolveSupabaseConfig(): { url: string; key: string; schema: str
   let url =
     getEnvVar("NEXT_PUBLIC_SUPABASE_URL") ||
     getEnvVar("SUPABASE_URL") ||
-    "";
+    (process.env.NODE_ENV !== "test" ? "https://ahyzrleofpdtfzrfsnbz.supabase.co" : "");
 
   let key =
     getEnvVar("SUPABASE_SERVICE_ROLE_KEY") ||
     getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
     getEnvVar("SUPABASE_ANON_KEY") ||
     getEnvVar("SUPABASE_KEY") ||
-    "";
+    (process.env.NODE_ENV !== "test" ? "sb_publishable_QvWdrXNd_bjP8W3a399-6g_WnZmHcQU" : "");
 
   let schema =
     getEnvVar("NEXT_PUBLIC_SUPABASE_SCHEMA") ||
