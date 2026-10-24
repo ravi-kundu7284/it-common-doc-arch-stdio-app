@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   dbFindUser,
   dbRecordLoginSuccess,
@@ -163,6 +163,14 @@ export async function POST(req: NextRequest) {
       username: user.username,
       email: user.email,
       fullName: user.full_name,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      phone: user.phone,
+      phoneCountryCode: user.phone_country_code,
+      avatarUrl: user.avatar_url,
+      company: user.company,
+      timezone: user.timezone,
+      bio: user.bio,
       designation: user.designation || "Software Architect",
       role: user.role || "architect",
       lastLoginAt: new Date().toISOString(),

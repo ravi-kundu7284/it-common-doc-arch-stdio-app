@@ -90,6 +90,14 @@ export interface AppUser {
   password_hash: string;
   password_salt: string;
   full_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  phone_country_code?: string | null;
+  avatar_url?: string | null;
+  company?: string | null;
+  timezone?: string | null;
+  bio?: string | null;
   designation?: string;
   role?: string; // 'architect' | 'admin' | 'reviewer'
   failed_login_attempts?: number;
@@ -167,6 +175,14 @@ class LocalSandboxDatabase {
       password_hash: "527bdb1ed439b504b24e97c62571ed6956739593573fa0694489387ce19acba77dbfb4d5631557107b119deeff99e488d983425cf556bad79ff7e196b887c350",
       password_salt: "0aedc1488bbf45f7c7fbee0f5eb5c84f",
       full_name: "Lead System Architect",
+      first_name: "Lead",
+      last_name: "Architect",
+      phone: "555-0199",
+      phone_country_code: "+1",
+      avatar_url: "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%20width%3D%22100%22%20height%3D%22100%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22grad%22%20x1%3D%220%25%22%20y1%3D%220%25%22%20x2%3D%22100%25%22%20y2%3D%22100%25%22%3E%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22%234f46e5%22%20%2F%3E%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22%239333ea%22%20%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2250%22%20fill%3D%22url(%23grad)%22%20%2F%3E%3Ctext%20x%3D%2250%22%20y%3D%2258%22%20font-size%3D%2234%22%20font-weight%3D%22bold%22%20font-family%3D%22system-ui%2C%20-apple-system%2C%20sans-serif%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%20fill%3D%22%23ffffff%22%3E%F0%9F%8F%9B%EF%B8%8F%3C%2Ftext%3E%3C%2Fsvg%3E",
+      company: "Enterprise Global Cloud",
+      timezone: "America/New_York",
+      bio: "Enterprise Architect leading scalable distributed cloud systems and AI orchestration.",
       designation: "Principal Enterprise Architect",
       role: "architect",
       failed_login_attempts: 0,
@@ -239,6 +255,15 @@ class LocalSandboxDatabase {
     if (u) {
       u.last_login_at = new Date().toISOString();
     }
+  }
+
+  updateUserProfile(id: string, updates: Partial<AppUser>): AppUser | null {
+    const u = this.users.get(id);
+    if (u) {
+      Object.assign(u, updates);
+      return u;
+    }
+    return null;
   }
 
   updateLockout(id: string, attempts: number, lockedUntil: string | null) {
@@ -874,7 +899,19 @@ export async function dbCreateUser(
         email: user.email,
         password_hash: user.password_hash,
         password_salt: user.password_salt,
-        full_name: user.full_name || user.username,
+        full_name:
+          user.full_name ||
+          (user.first_name
+            ? `${user.first_name} ${user.last_name || ""}`.trim()
+            : user.username),
+        first_name: user.first_name || null,
+        last_name: user.last_name || null,
+        phone: user.phone || null,
+        phone_country_code: user.phone_country_code || null,
+        avatar_url: user.avatar_url || null,
+        company: user.company || null,
+        timezone: user.timezone || null,
+        bio: user.bio || null,
         designation: user.designation || "Software Architect",
         role: user.role || "architect",
         failed_login_attempts: 0,
@@ -889,6 +926,55 @@ export async function dbCreateUser(
     console.error("Supabase user creation error:", error);
     throw new Error(`Database user creation failed: ${error.message}`);
   }
+  return data as AppUser;
+}
+
+export async function dbUpdateUserProfile(
+  userId: string,
+  profile: {
+    full_name?: string;
+    first_name?: string;
+    last_name?: string;
+    phone?: string;
+    phone_country_code?: string;
+    avatar_url?: string;
+    company?: string;
+    timezone?: string;
+    bio?: string;
+    designation?: string;
+  }
+): Promise<AppUser | null> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return sandboxDb.updateUserProfile(userId, profile);
+  }
+
+  const updates: Record<string, any> = {};
+  if (profile.full_name !== undefined) updates.full_name = profile.full_name;
+  if (profile.first_name !== undefined) updates.first_name = profile.first_name;
+  if (profile.last_name !== undefined) updates.last_name = profile.last_name;
+  if (profile.phone !== undefined) updates.phone = profile.phone;
+  if (profile.phone_country_code !== undefined) updates.phone_country_code = profile.phone_country_code;
+  if (profile.avatar_url !== undefined) updates.avatar_url = profile.avatar_url;
+  if (profile.company !== undefined) updates.company = profile.company;
+  if (profile.timezone !== undefined) updates.timezone = profile.timezone;
+  if (profile.bio !== undefined) updates.bio = profile.bio;
+  if (profile.designation !== undefined) updates.designation = profile.designation;
+
+  const { data, error } = await client
+    .from("app_users")
+    .update(updates)
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    lastDbError = error.message;
+    console.error("Supabase profile update error:", error);
+    return sandboxDb.updateUserProfile(userId, updates);
+  }
+
+  sandboxDb.updateUserProfile(userId, data);
   return data as AppUser;
 }
 

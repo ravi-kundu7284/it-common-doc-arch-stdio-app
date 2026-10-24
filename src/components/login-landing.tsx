@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useAuthStore } from "@/store/use-auth-store";
@@ -21,7 +21,19 @@ import {
   FileText,
   Database,
   Terminal,
+  Phone,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+  Globe,
+  Building2,
+  Camera,
 } from "lucide-react";
+import {
+  COUNTRY_CODES,
+  PRESET_AVATARS,
+  TIMEZONES,
+} from "@/lib/country-codes";
 
 export const LoginLanding: React.FC = () => {
   const { login, register, forgotPassword, resetPassword } = useAuthStore();
@@ -32,7 +44,16 @@ export const LoginLanding: React.FC = () => {
   const [identifier, setIdentifier] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+1");
+  const [avatarUrl, setAvatarUrl] = useState(PRESET_AVATARS[0].svgDataUri);
+  const [company, setCompany] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
+  const [bio, setBio] = useState("");
+  const [showMoreSettings, setShowMoreSettings] = useState(false);
   const [designation, setDesignation] = useState("Principal Solutions Architect");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -85,12 +106,47 @@ export const LoginLanding: React.FC = () => {
     }
   };
 
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setErrorMsg("Avatar image must be under 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setAvatarUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setIsLoading(true);
 
-    const result = await register(username, email, password, fullName, designation);
+    const derivedFullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+    const finalFullName = fullName.trim() || derivedFullName || username.trim();
+
+    const result = await register(
+      username,
+      email,
+      password,
+      finalFullName,
+      designation,
+      {
+        firstName: firstName.trim() || undefined,
+        lastName: lastName.trim() || undefined,
+        phone: phone.trim() || undefined,
+        phoneCountryCode: phone.trim() ? phoneCountryCode : undefined,
+        avatarUrl: avatarUrl || undefined,
+        company: company.trim() || undefined,
+        timezone: timezone || undefined,
+        bio: bio.trim() || undefined,
+      }
+    );
     setIsLoading(false);
 
     if (!result.success) {
@@ -421,39 +477,178 @@ export const LoginLanding: React.FC = () => {
               </form>
             )}
 
-            {/* SIGN UP FORM WITH DESIGNATION */}
+            {/* SIGN UP FORM WITH PROFILE SETTINGS */}
             {mode === "signup" && (
               <form onSubmit={handleSignUp} className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Username</label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="e.g. ravi_architect"
-                      className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
+                {/* Avatar Selector */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <label className="block text-xs font-medium text-slate-300 mb-2">
+                    Profile Picture / Avatar
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="relative group shrink-0">
+                      <img
+                        src={avatarUrl}
+                        alt="Avatar preview"
+                        className="w-12 h-12 rounded-full border-2 border-indigo-500/60 object-cover bg-slate-900 shadow-md"
+                      />
+                      <label
+                        htmlFor="landing-avatar-upload"
+                        className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition text-white"
+                        title="Upload photo"
+                      >
+                        <Camera className="w-4 h-4" />
+                      </label>
+                      <input
+                        id="landing-avatar-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {PRESET_AVATARS.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setAvatarUrl(preset.svgDataUri)}
+                            title={preset.name}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs transition border ${
+                              avatarUrl === preset.svgDataUri
+                                ? "border-indigo-400 scale-110 shadow-sm shadow-indigo-500/50"
+                                : "border-slate-700 hover:border-slate-500 opacity-80 hover:opacity-100"
+                            }`}
+                          >
+                            <img
+                              src={preset.svgDataUri}
+                              alt={preset.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          </button>
+                        ))}
+                        <label
+                          htmlFor="landing-avatar-upload"
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] text-slate-300 flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Upload className="w-2.5 h-2.5" />
+                          <span>Upload</span>
+                        </label>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">
+                        Pick a persona preset or upload your own image (&lt;2MB).
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Corporate Email</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@enterprise.com"
-                      className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                    />
+                {/* Name Fields: First Name & Last Name (2 columns) */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">First Name</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => {
+                          setFirstName(e.target.value);
+                          setFullName(`${e.target.value} ${lastName}`.trim());
+                        }}
+                        placeholder="e.g. Ravi"
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Last Name</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => {
+                          setLastName(e.target.value);
+                          setFullName(`${firstName} ${e.target.value}`.trim());
+                        }}
+                        placeholder="e.g. Kundu"
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
                 </div>
 
+                {/* Username & Corporate Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Username *</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="e.g. ravi_architect"
+                        className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Corporate Email *</label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@enterprise.com"
+                        className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Optional Phone Number with Country Code */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-slate-300">Phone Number</label>
+                    <span className="text-[10px] text-slate-500 font-normal">Optional</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="w-32 shrink-0 relative">
+                      <select
+                        value={phoneCountryCode}
+                        onChange={(e) => setPhoneCountryCode(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                      >
+                        {COUNTRY_CODES.map((c) => (
+                          <option key={c.id} value={c.code} className="bg-slate-900 text-white">
+                            {c.flag} {c.code} ({c.id})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                    <div className="flex-1 relative">
+                      <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="e.g. (555) 234-5678"
+                        className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Professional Designation */}
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">
                     Professional Designation
@@ -470,8 +665,9 @@ export const LoginLanding: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Password */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Password *</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
@@ -491,6 +687,77 @@ export const LoginLanding: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                </div>
+
+                {/* Collapsible: More Profile Settings */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreSettings(!showMoreSettings)}
+                    className="w-full py-1.5 px-3 rounded-lg bg-slate-950/60 hover:bg-slate-900 border border-slate-800 text-[11px] text-slate-400 hover:text-slate-200 flex items-center justify-between transition"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>More Profile Settings (Company, Timezone, Bio)</span>
+                    </div>
+                    {showMoreSettings ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  {showMoreSettings && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3 animate-in fade-in">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                          Company / Organization
+                        </label>
+                        <div className="relative">
+                          <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            value={company}
+                            onChange={(e) => setCompany(e.target.value)}
+                            placeholder="e.g. Enterprise Cloud Systems"
+                            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">Timezone</label>
+                        <div className="relative">
+                          <Globe className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <select
+                            value={timezone}
+                            onChange={(e) => setTimezone(e.target.value)}
+                            className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                          >
+                            {TIMEZONES.map((tz) => (
+                              <option key={tz.value} value={tz.value} className="bg-slate-900 text-white">
+                                {tz.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                          Professional Bio / Architectural Focus
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={bio}
+                          onChange={(e) => setBio(e.target.value)}
+                          placeholder="Brief note on your architecture focus, e.g. Distributed systems, microservices, cloud security..."
+                          className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
