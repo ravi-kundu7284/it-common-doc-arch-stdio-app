@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.2.0] - 2026-10-24
+
+### Enterprise Auth Verification, Multi-Channel Notifications & Free-Tier Cost Guards
+
+This release adds comprehensive email verification, password reset, event notifications, optional phone/SMS OTP verification, and strict free-tier cost guards with zero-config offline developer fallback.
+
+#### Added
+- **Email Verification Subsystem:**
+  - 32-byte cryptographically secure token generation (`crypto.getRandomValues`) with SHA-256 token hashing (`token_hash`) at rest in PostgreSQL and local sandbox.
+  - 24-hour token expiry with strict single-use consumption (`used_at IS NOT NULL`).
+  - GET & POST `/api/auth/verify-email` endpoint validating tokens and stamping `email_verified_at`.
+  - Rate-limited `/api/auth/resend-verification` endpoint with 60-second cooldown per email and invalidation of prior unused tokens.
+  - Interactive `/verify-email` page with loading, success, invalid token, and resend states.
+  - Dismissible dashboard notification banner for logged-in users with unverified emails.
+  - Sensitive action authorization guards (`isUserEmailVerified`) preventing unverified users from deleting projects or ADRs.
+- **Enhanced Password Reset Flow:**
+  - `/api/auth/forgot-password` with timing equalization (minimum 120ms) and uniform non-enumerating responses preventing account enumeration.
+  - 30-minute single-use password reset tokens with SHA-256 hashing.
+  - `/api/auth/reset-password` enforcing 8+ character password policy, PBKDF2 hashing (SHA-512 with 100,000 iterations), token invalidation, multi-session revocation across all active devices (`dbRevokeUserSessions`), and security confirmation email.
+  - Dedicated `/forgot-password` and `/reset-password` UI pages with validation feedback.
+- **Optional Phone & SMS Verification (Message Central VerifyNow):**
+  - Strictly optional phone verification only required for enabling SMS alerts.
+  - `/api/auth/phone/send` with E.164 normalization via `libphonenumber-js` (default country India `+91`), 60s resend cooldown, daily SMS guards, and configurable Cloudflare Turnstile bot protection hook.
+  - `/api/auth/phone/verify` validating OTP against Message Central VerifyNow or local console fallback, with max 5 attempts limit and 10-minute expiry.
+  - Profile & Settings UI tab with phone verification status badge, 60s OTP countdown timer, and notification preferences.
+- **Multi-Channel Notification Infrastructure (`src/lib/notifications/`):**
+  - `Mailer` interface with `Smtp2goMailer` (REST API over `fetch` with `X-Smtp2go-Api-Key`, 100% Edge Runtime compatible) and `ConsoleMailer` (terminal logger with action link highlights).
+  - `SmsSender` interface with `MessageCentralSmsSender` (token caching, VerifyNow OTP endpoints) and `ConsoleSmsSender` (terminal logger).
+  - Lazy provider resolution ensuring zero build-time side effects and runtime production enforcement.
+  - `NotificationService` facade with non-blocking async dispatch, inline HTML + plaintext email templates, retry with exponential backoff & jitter (strictly skipping OTP retry to prevent duplicate charges), and DB audit logging to `notification_logs`.
+  - Event notification integration for multi-format exports, architecture quality audits, and ADR status changes.
+- **Free-Tier & Cost Protection Guards (`src/lib/notifications/cost-guards.ts`):**
+  - Daily & monthly configurable caps (`EMAIL_DAILY_CAP=180`, `EMAIL_MONTHLY_CAP=900`, `SMS_DAILY_CAP=50`, `SMS_PER_USER_DAILY_CAP=5`, `SMS_PER_IP_DAILY_CAP=10`).
+  - Priority rule: security emails (verify-email, password-reset, password-changed) are strictly prioritized; low-priority notification emails are deferred/dropped when daily usage reaches >=95%.
+  - Proactive warning logs emitted when usage crosses 80% of any cap.
+- **Database Migrations & Sandbox Parity:**
+  - Liquibase migration `010-add-auth-verification-and-notifications.sql` adding `email_verified_at`, `phone_verified_at`, and `notification_prefs` to `app_users`, and creating `auth_tokens`, `phone_verifications`, `notification_logs`, and `usage_counters` with rollback blocks and Row-Level Security (RLS).
+  - 100% schema and functional parity mirrored in `LocalSandboxDatabase` for zero-config offline mode.
+- **Automated Verification:**
+  - 39/39 tests passing across 10 test suites (`tests/auth-flow.test.mjs`, `tests/notifications.test.mjs`, etc.).
+  - TypeScript type checking passes with 0 errors (`npx tsc --noEmit`).
+  - Production build succeeds across all 28 Edge API routes and static UI pages.
+
+---
+
 ## [2.1.0] - 2026-10-23
 
 ### End-to-End AI User Journey & Multi-Document Architecture Studio

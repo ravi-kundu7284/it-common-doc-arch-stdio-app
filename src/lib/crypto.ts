@@ -1,4 +1,4 @@
-﻿import { getEnvVar } from "./env";
+import { getEnvVar } from "./env";
 
 // Universal Web Crypto API - 100% compatible with Edge Runtime, Node.js, and Cloudflare Pages
 const getEncryptionSecret = (): string => {
@@ -23,19 +23,14 @@ const hex2buf = (hex: string): Uint8Array => {
 };
 
 function getCrypto(): Crypto {
-  if (typeof globalThis !== "undefined" && globalThis.crypto?.subtle) {
-    return globalThis.crypto;
+  const g = globalThis as any;
+  if (g?.crypto?.subtle && typeof g.crypto.getRandomValues === "function") {
+    return g.crypto;
   }
-  try {
-    const req = typeof eval !== "undefined" ? eval("require") : null;
-    if (req) {
-      const nodeCrypto = req("crypto");
-      if (nodeCrypto?.webcrypto) {
-        return nodeCrypto.webcrypto as unknown as Crypto;
-      }
-    }
-  } catch {}
-  return (globalThis as any)?.crypto;
+  if (g?.crypto?.webcrypto?.subtle) {
+    return g.crypto.webcrypto;
+  }
+  return g?.crypto;
 }
 
 // Derive AES-GCM Key from secret using SHA-256
@@ -196,6 +191,24 @@ export function isExpired(expiresAt: string | null | undefined): boolean {
   if (!expiresAt) return false;
   const expDate = new Date(expiresAt);
   return expDate.getTime() <= Date.now();
+}
+
+/**
+ * Generate a cryptographically secure random token (e.g., for email verification, password reset).
+ */
+export function generateSecureToken(byteLength = 32): string {
+  const bytes = new Uint8Array(byteLength);
+  getCrypto().getRandomValues(bytes);
+  return buf2hex(bytes.buffer);
+}
+
+/**
+ * Hash a high-entropy token using SHA-256 for secure constant-length storage and comparison.
+ */
+export async function hashToken(token: string): Promise<string> {
+  const enc = new TextEncoder();
+  const hashBuf = await getCrypto().subtle.digest("SHA-256", enc.encode(token));
+  return buf2hex(hashBuf);
 }
 
 export interface SessionData {

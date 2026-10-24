@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbGetAdrs, dbSaveAdr, dbDeleteAdr, dbGetAdr } from "@/lib/supabase";
+import { dbGetAdrs, dbSaveAdr, dbDeleteAdr, dbGetAdr, dbFindUserById } from "@/lib/supabase";
+import { getAuthenticatedUser, isUserEmailVerified } from "@/lib/api-auth";
+import { NotificationService } from "@/lib/notifications";
 
 export const runtime = "edge";
 
@@ -49,6 +51,56 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Asynchronously dispatch ADR notifications (non-blocking)
+    (async () => {
+      try {
+        const authUser = await getAuthenticatedUser(req);
+        if (authUser?.userId && authUser.userId !== "00000000-0000-0000-0000-000000000001") {
+          const user = await dbFindUserById(authUser.userId);
+          if (user) {
+            const adrTitle = saved.title || "Architecture Decision";
+            const adrStatus = saved.status || "proposed";
+            const adrIdStr = saved.stable_id || saved.id;
+
+            // 1. Email notification
+            NotificationService.sendEmail(
+              {
+                to: user.email,
+                template: "adr-alert",
+                priority: "notification",
+                userId: user.id,
+                data: {
+                  name: user.full_name || user.username,
+                  adrTitle,
+                  adrId: adrIdStr,
+                  status: adrStatus.toUpperCase(),
+                  reason: body.supersedesId
+                    ? `Superseded prior architectural decision (${body.supersedesId})`
+                    : `ADR lifecycle status updated to ${adrStatus}`,
+                  adrUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}`,
+                },
+              },
+              true
+            ).catch(() => {});
+
+            // 2. SMS notification (if opted in and phone verified)
+            if (user.phone && user.phone_verified_at) {
+              NotificationService.sendSms(
+                user.phone,
+                `DocArch AI: ADR '${adrTitle}' status is now ${adrStatus.toUpperCase()}.`,
+                "adr-alert",
+                undefined,
+                user.id,
+                true
+              ).catch(() => {});
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.error("[ADR] Notification dispatch error:", notifErr);
+      }
+    })();
+
     return NextResponse.json({ success: true, adr: saved });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -57,6 +109,21 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authUser = await getAuthenticatedUser(req);
+    if (authUser?.userId && authUser.userId !== "00000000-0000-0000-0000-000000000001") {
+      const isVerified = await isUserEmailVerified(authUser.userId);
+      if (!isVerified) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Email verification required. Please verify your email before deleting architectural governance records.",
+            requiresVerification: true,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     if (!id) {

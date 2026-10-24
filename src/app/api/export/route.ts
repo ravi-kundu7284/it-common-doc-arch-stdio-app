@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbGetProject } from "@/lib/supabase";
+import { dbGetProject, dbFindUserById } from "@/lib/supabase";
+import { getAuthenticatedUser } from "@/lib/api-auth";
+import { NotificationService } from "@/lib/notifications";
 import {
   generateStandaloneHtml,
   generateRawMarkdown,
@@ -27,6 +29,52 @@ export async function POST(req: NextRequest) {
     const titleSlug = (project.metadata?.title || "architecture")
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "-");
+
+    // Asynchronously dispatch export completion notifications (non-blocking)
+    (async () => {
+      try {
+        const authUser = await getAuthenticatedUser(req);
+        if (authUser?.userId && authUser.userId !== "00000000-0000-0000-0000-000000000001") {
+          const user = await dbFindUserById(authUser.userId);
+          if (user) {
+            const projectName = project.metadata?.title || "Architecture Package";
+            const fmt = String(format).toUpperCase();
+
+            // 1. Email notification (preference checked inside NotificationService)
+            NotificationService.sendEmail(
+              {
+                to: user.email,
+                template: "export-alert",
+                priority: "notification",
+                userId: user.id,
+                data: {
+                  name: user.full_name || user.username,
+                  projectName,
+                  format: fmt,
+                  exportedAt: new Date().toUTCString(),
+                  documentCount: project.documents?.length || 1,
+                },
+              },
+              true
+            ).catch(() => {});
+
+            // 2. SMS notification (preference & phone verification checked inside NotificationService)
+            if (user.phone && user.phone_verified_at) {
+              NotificationService.sendSms(
+                user.phone,
+                `DocArch AI: Documentation export completed for ${projectName} (${fmt}).`,
+                "export-alert",
+                undefined,
+                user.id,
+                true
+              ).catch(() => {});
+            }
+          }
+        }
+      } catch (notifErr) {
+        console.error("[Export] Notification dispatch error:", notifErr);
+      }
+    })();
 
     switch (format) {
       case "html": {

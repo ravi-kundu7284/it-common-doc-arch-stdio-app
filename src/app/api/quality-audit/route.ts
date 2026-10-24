@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbGetLatestReview, dbSaveReview, dbGetProject } from "@/lib/supabase";
+import { dbGetLatestReview, dbSaveReview, dbGetProject, dbFindUserById } from "@/lib/supabase";
+import { getAuthenticatedUser } from "@/lib/api-auth";
+import { NotificationService } from "@/lib/notifications";
 import { auditProjectArchitecture } from "@/lib/architecture-audit";
 
 export const runtime = "edge";
@@ -64,6 +66,55 @@ export async function POST(req: NextRequest) {
       findings: auditResult.findings,
       summary: auditResult.summary,
     });
+
+    // Asynchronously dispatch audit notifications (non-blocking)
+    (async () => {
+      try {
+        const authUser = await getAuthenticatedUser(req);
+        if (authUser?.userId && authUser.userId !== "00000000-0000-0000-0000-000000000001") {
+          const user = await dbFindUserById(authUser.userId);
+          if (user) {
+            const projectName = project.metadata?.title || "Architecture Review";
+            const criticalCount = auditResult.findings.filter(
+              (f: any) => f.severity === "critical" || f.severity === "high"
+            ).length;
+
+            // 1. Email notification
+            NotificationService.sendEmail(
+              {
+                to: user.email,
+                template: "audit-alert",
+                priority: "notification",
+                userId: user.id,
+                data: {
+                  name: user.full_name || user.username,
+                  projectName,
+                  score: auditResult.overallScore,
+                  totalFindings: auditResult.findings.length,
+                  criticalFindings: criticalCount,
+                  auditUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}`,
+                },
+              },
+              true
+            ).catch(() => {});
+
+            // 2. SMS notification (if opted in and phone verified)
+            if (user.phone && user.phone_verified_at) {
+              NotificationService.sendSms(
+                user.phone,
+                `DocArch AI Audit: ${projectName} scored ${auditResult.overallScore}/100 with ${criticalCount} high/critical findings.`,
+                "audit-alert",
+                undefined,
+                user.id,
+                true
+              ).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[QualityAudit] Notification dispatch error:", err);
+      }
+    })();
 
     return NextResponse.json({
       success: true,

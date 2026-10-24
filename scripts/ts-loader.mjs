@@ -2,6 +2,11 @@ import fs from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import ts from "typescript";
+import nodeCrypto from "node:crypto";
+
+if (!globalThis.crypto) {
+  globalThis.crypto = nodeCrypto.webcrypto;
+}
 
 const TS_EXTENSIONS = new Set([".ts", ".tsx"]);
 

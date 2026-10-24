@@ -47,6 +47,26 @@ SUPABASE_SERVICE_ROLE_KEY=
 # --- Security & Auth Configuration ---
 JWT_SECRET=super-secret-local-dev-jwt-key
 API_KEY_SALT=local-dev-salt
+APP_BASE_URL=http://localhost:3000
+
+# --- Email Notifications (SMTP2GO REST API over fetch) ---
+# Leave blank for zero-config offline development with terminal ConsoleMailer
+EMAIL_PROVIDER=smtp2go
+SMTP2GO_API_KEY=api-YOUR-SMTP2GO-KEY
+MAIL_FROM=no-reply@your-verified-domain.com
+
+# --- SMS Verification (Message Central VerifyNow REST API) ---
+# Leave blank for zero-config offline development with terminal ConsoleSmsSender
+SMS_PROVIDER=messagecentral
+MESSAGECENTRAL_CUSTOMER_ID=YOUR_CUSTOMER_ID
+MESSAGECENTRAL_KEY=YOUR_MESSAGECENTRAL_AUTH_KEY
+
+# --- Notification Cost Guard Caps ---
+EMAIL_DAILY_CAP=180
+EMAIL_MONTHLY_CAP=900
+SMS_DAILY_CAP=50
+SMS_PER_USER_DAILY_CAP=5
+SMS_PER_IP_DAILY_CAP=10
 ```
 
 ---
@@ -56,17 +76,31 @@ API_KEY_SALT=local-dev-salt
 The test suite runs with Node's native test runner (`node:test`) accelerated by a custom TypeScript transpile loader:
 
 ```bash
-# Run all unit, integration, and engine test suites
+# Run all 10 test suites (39 unit & integration tests)
 npm test
 ```
 
 ### Test Suite Structure (`tests/`)
 - `tests/smoke.test.mjs`: Test environment and runner operational verification.
+- `tests/auth-flow.test.mjs`: Cryptographic token generation, SHA-256 hashing, email verification single-use consumption, password reset with PBKDF2 re-hashing, multi-session revocation, phone E.164 normalization, and sensitive action guards.
+- `tests/notifications.test.mjs`: ConsoleMailer and ConsoleSmsSender dev fallbacks, production safeguards, daily/monthly email and SMS hard caps, 80% usage threshold warnings, low-priority email deferral near caps, SMTP2GO fetch client mock, and Message Central OTP token cache mock.
 - `tests/database.test.mjs`: CRUD and lifecycle validation across all 9 entities (`projects`, `document_sections`, `document_revisions`, `diagrams`, `workflows`, `requirements`, `requirement_trace_links`, `adrs`, `architecture_reviews`).
 - `tests/architecture-audit.test.mjs`: Static analysis rule checks (SPOFs, encryption, idempotency, DLQs, SLA/RTO/RPO).
 - `tests/workflow-engine.test.mjs`: Directed graph validation (missing triggers, broken edge references, cycles, simulations).
 - `tests/impact-engine.test.mjs`: Requirement change impact detection, automated section patch proposals, and Traceability Matrix verification.
 - `tests/export-engine.test.mjs`: Multi-format generators (HTML bundle, Markdown, YAML, JSON, Word DOCX).
+- `tests/openai-integration.test.mjs`: OpenAI integration and fallback handlers.
+- `tests/ai-analyzer-and-docs.test.mjs`: Prompt parsing and document generation tests.
+
+---
+
+## 4. Notification Architecture & Zero-Config Offline Mode
+
+The application provides an enterprise notification subsystem under `src/lib/notifications/`:
+- **Mailer Interface (`Mailer`):** Implemented by `Smtp2goMailer` (production REST API over `fetch` with `X-Smtp2go-Api-Key`, 100% Edge Runtime compatible) and `ConsoleMailer` (offline dev mode printing emails and clickable action links to the console).
+- **SMS Sender Interface (`SmsSender`):** Implemented by `MessageCentralSmsSender` (VerifyNow REST API for India SMS OTP and transaction notifications) and `ConsoleSmsSender` (offline dev mode printing OTP codes to the terminal).
+- **Zero-Config Developer Experience:** When `SMTP2GO_API_KEY` or Message Central credentials are empty, the app defaults to `ConsoleMailer` and `ConsoleSmsSender`. Developers can sign up, copy the verification link from their terminal, and test the entire workflow locally without needing cloud service accounts or prepaid credits.
+- **Production Guard:** Both `ConsoleMailer` and `ConsoleSmsSender` throw an explicit runtime exception if initialized when `NODE_ENV === "production"` without external credentials.
 
 ---
 

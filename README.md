@@ -4,13 +4,20 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14.0-black.svg)](https://nextjs.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC.svg)](https://tailwindcss.com/)
 [![Liquibase](https://img.shields.io/badge/Liquibase-PostgreSQL-red.svg)](https://www.liquibase.org/)
-[![Tests Passing](https://img.shields.io/badge/Tests-20%2F20%20Passing-brightgreen.svg)]()
+[![Tests Passing](https://img.shields.io/badge/Tests-39%2F39%20Passing-brightgreen.svg)]()
 
 A modern, production-ready, AI-powered **IT Architecture & Technical Documentation Studio** engineered for Enterprise Architects, Solution Architects, Tech Leads, DevOps Engineers, and Product Managers to create, customize, maintain, validate, and collaborate on technical architecture documents, visual diagrams, workflows, ADRs, and end-to-end traceability matrices.
 
 ---
 
 ## 🌟 Key Capabilities & Studio Modules
+
+### 0. Enterprise Identity, Verification & Notifications
+- **Email Verification:** Cryptographic 32-byte tokens (`auth_tokens` SHA-256 hash storage), 24h validity, single-use enforcement, dismissible dashboard banner, and verification-gated sensitive actions.
+- **Enhanced Password Reset:** Uniform non-enumerating forgot-password responses, 120ms timing equalization, PBKDF2 (SHA-512 with 100,000 iterations), multi-session revocation across all devices, and security alert email confirmation.
+- **Optional Phone & SMS Verification:** Optional phone verification for SMS alerts. Normalization to E.164 via `libphonenumber-js` (default country India `+91`), Message Central VerifyNow OTP integration, max 5 attempt limit, 10-minute expiry, and Cloudflare Turnstile bot protection hook.
+- **Free-Tier Cost Protection Guards:** Hard daily/monthly limits below provider caps (SMTP2GO: 180/day, 900/month; Message Central: 50/day total, 5/user/day, 10/IP/day). Security emails strictly prioritized over notification emails near caps; 80% usage threshold warnings.
+- **Zero-Config Offline Fallback:** Default `ConsoleMailer` and `ConsoleSmsSender` print emails, clickable links, and OTP codes directly to the terminal without requiring API keys or cloud setup. Runs seamlessly offline and throws runtime guards if deployed to production without provider keys.
 
 ### 1. Dual-Level Document Studio (HLD & LLD)
 - **High-Level Design (HLD):** System context, C4 container topology, business objectives, domain boundaries, network trust zones, and availability SLAs.
@@ -63,13 +70,13 @@ A modern, production-ready, AI-powered **IT Architecture & Technical Documentati
 
 The studio is designed for zero-friction adoption:
 1. **Zero-Config Standalone Mode (Default):** Runs 100% offline without remote database connections or paid AI API keys. Utilizes an in-memory database (`LocalSandboxDatabase`) with browser `localStorage` synchronization and a deterministic local architecture synthesis engine.
-2. **Enterprise Cloud Mode:** Integrates seamlessly with Supabase PostgreSQL (managed via Liquibase changesets 001–008) and leading AI models (OpenAI GPT-4o, Google Gemini 1.5 Pro, Anthropic Claude 3.5 Sonnet, or local Ollama).
+2. **Enterprise Cloud Mode:** Integrates seamlessly with Supabase PostgreSQL (managed via Liquibase changesets 001–010) and leading AI models (OpenAI GPT-4o, Google Gemini 1.5 Pro, Anthropic Claude 3.5 Sonnet, or local Ollama).
 
 ```mermaid
 graph LR
     UI["Studio UI Tier (Next.js 14 / Zustand)"] --> Engine["Engine Tier (Audit / Impact / Workflow / Export)"]
     Engine --> LocalDB["Zero-Config Local Sandbox"]
-    Engine -.->|Configured| SupabaseDB["Supabase PostgreSQL (Liquibase 001-008)"]
+    Engine -.->|Configured| SupabaseDB["Supabase PostgreSQL (Liquibase 001-010)"]
     UI -.->|Configured| CloudLLM["Cloud LLMs / Ollama"]
     UI -.->|Offline| LocalSynth["Local Architecture Synthesizer"]
 ```
@@ -99,7 +106,7 @@ Visit [http://localhost:3000](http://localhost:3000) to start designing.
 
 ### Automated Test Suite
 ```bash
-# Run all unit, integration, and engine test suites (20 tests across 6 suites)
+# Run all unit, integration, and engine test suites (39 tests across 10 suites)
 npm test
 ```
 

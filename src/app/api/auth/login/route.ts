@@ -173,6 +173,9 @@ export async function POST(req: NextRequest) {
       bio: user.bio,
       designation: user.designation || "Software Architect",
       role: user.role || "architect",
+      emailVerifiedAt: user.email_verified_at || null,
+      phoneVerifiedAt: user.phone_verified_at || null,
+      notificationPrefs: user.notification_prefs || null,
       lastLoginAt: new Date().toISOString(),
     };
 

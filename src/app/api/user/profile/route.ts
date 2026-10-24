@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
         bio: user.bio,
         designation: user.designation,
         role: user.role,
+        emailVerifiedAt: user.email_verified_at || null,
+        phoneVerifiedAt: user.phone_verified_at || null,
+        notificationPrefs: user.notification_prefs || null,
         lastLoginAt: user.last_login_at,
       },
     });
@@ -143,6 +146,9 @@ export async function PUT(req: NextRequest) {
         bio: updated.bio,
         designation: updated.designation,
         role: updated.role,
+        emailVerifiedAt: updated.email_verified_at || null,
+        phoneVerifiedAt: updated.phone_verified_at || null,
+        notificationPrefs: updated.notification_prefs || null,
         lastLoginAt: updated.last_login_at,
       },
     });
@@ -154,3 +160,4 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
+

@@ -106,6 +106,9 @@ export async function GET(req: NextRequest) {
         bio: user.bio,
         designation: user.designation || "Software Architect",
         role: user.role,
+        emailVerifiedAt: user.email_verified_at || null,
+        phoneVerifiedAt: user.phone_verified_at || null,
+        notificationPrefs: user.notification_prefs || null,
         lastLoginAt: user.last_login_at,
       },
       aiConfig: aiConfig

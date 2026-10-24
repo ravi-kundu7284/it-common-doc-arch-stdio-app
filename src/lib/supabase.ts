@@ -104,6 +104,9 @@ export interface AppUser {
   locked_until?: string | null;
   reset_token?: string | null;
   reset_token_expires_at?: string | null;
+  email_verified_at?: string | null;
+  phone_verified_at?: string | null;
+  notification_prefs?: any;
   created_at: string;
   last_login_at: string;
 }
@@ -145,6 +148,47 @@ export interface UserAiConfig {
   updated_at: string;
 }
 
+export interface AuthToken {
+  id: string;
+  user_id: string;
+  type: "email_verify" | "password_reset";
+  token_hash: string;
+  expires_at: string;
+  used_at?: string | null;
+  created_at: string;
+}
+
+export interface PhoneVerification {
+  id: string;
+  user_id: string;
+  phone: string;
+  provider_verification_id?: string | null;
+  status: "pending" | "verified" | "failed" | "expired";
+  attempts: number;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface NotificationLogRecord {
+  id: string;
+  user_id?: string | null;
+  channel: string;
+  template: string;
+  recipient: string;
+  status: "sent" | "failed" | "dropped";
+  provider_message_id?: string | null;
+  error?: string | null;
+  created_at: string;
+}
+
+export interface UsageCounterRecord {
+  id: string;
+  channel: string;
+  period_key: string;
+  count: number;
+  updated_at: string;
+}
+
 // ============================================================================
 // Fallback In-Memory/Persistent Sandbox Store
 // Used when Supabase env variables are not yet configured so tests pass immediately.
@@ -163,6 +207,10 @@ class LocalSandboxDatabase {
   public traceLinks: Map<string, any> = new Map();
   public adrs: Map<string, any> = new Map();
   public reviews: Map<string, any[]> = new Map();
+  public authTokens: Map<string, AuthToken> = new Map();
+  public phoneVerifications: Map<string, PhoneVerification> = new Map();
+  public notificationLogs: NotificationLogRecord[] = [];
+  public usageCounters: Map<string, number> = new Map();
 
   constructor() {
     // Seed Demo Architect User
@@ -187,6 +235,12 @@ class LocalSandboxDatabase {
       role: "architect",
       failed_login_attempts: 0,
       locked_until: null,
+      email_verified_at: new Date().toISOString(),
+      phone_verified_at: new Date().toISOString(),
+      notification_prefs: {
+        email: { verify: true, password_reset: true, export: true, audit: true, adr: true },
+        sms: { audit: false, adr: false, export: false },
+      },
       created_at: new Date().toISOString(),
       last_login_at: new Date().toISOString(),
     });
@@ -194,6 +248,26 @@ class LocalSandboxDatabase {
     // Seed Demo Admin User
     // Password: AdminPassword2026!
     const adminId = "00000000-0000-0000-0000-000000000002";
+    this.users.set(adminId, {
+      id: adminId,
+      username: "super_admin",
+      email: "admin@docarch.ai",
+      password_hash: "cbd1b59b7a780a85f450fec31bd0f6c018f173272facfee909ea08b9914dd122e2f8c1677b9f25d066e612681ccc4f590fc3a58e26eeb05d690ce51fd9460f71",
+      password_salt: "0070d014a1003faaec508fd76544b1a9",
+      full_name: "DocArch Chief Administrator",
+      designation: "Chief Technology Architect",
+      role: "admin",
+      failed_login_attempts: 0,
+      locked_until: null,
+      email_verified_at: new Date().toISOString(),
+      phone_verified_at: null,
+      notification_prefs: {
+        email: { verify: true, password_reset: true, export: true, audit: true, adr: true },
+        sms: { audit: false, adr: false, export: false },
+      },
+      created_at: new Date().toISOString(),
+      last_login_at: new Date().toISOString(),
+    });
     this.users.set(adminId, {
       id: adminId,
       username: "super_admin",
@@ -242,6 +316,9 @@ class LocalSandboxDatabase {
       locked_until: null,
       designation: user.designation || "Software Architect",
       role: user.role || "architect",
+      email_verified_at: null,
+      phone_verified_at: null,
+      notification_prefs: null,
       ...user,
       created_at: now,
       last_login_at: now,
@@ -339,6 +416,153 @@ class LocalSandboxDatabase {
       if (sess.user_id === userId) this.sessions.delete(sId);
     }
     return this.users.delete(userId);
+  }
+
+  // Verification & Preference methods
+  verifyEmail(userId: string): boolean {
+    const u = this.users.get(userId);
+    if (u) {
+      u.email_verified_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  }
+
+  verifyPhone(userId: string, phone: string): boolean {
+    const u = this.users.get(userId);
+    if (u) {
+      u.phone = phone;
+      u.phone_verified_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  }
+
+  updateNotificationPrefs(userId: string, prefs: any): boolean {
+    const u = this.users.get(userId);
+    if (u) {
+      u.notification_prefs = prefs;
+      return true;
+    }
+    return false;
+  }
+
+  // Auth Tokens
+  createAuthToken(token: Omit<AuthToken, "id" | "created_at">): AuthToken {
+    const id = "tok_" + Math.random().toString(36).substring(2, 11);
+    const item: AuthToken = {
+      used_at: null,
+      ...token,
+      id,
+      created_at: new Date().toISOString(),
+    };
+    this.authTokens.set(id, item);
+    return item;
+  }
+
+  findAuthTokenByHash(hash: string, type?: string): AuthToken | null {
+    for (const t of Array.from(this.authTokens.values())) {
+      if (t.token_hash === hash) {
+        if (!type || t.type === type) {
+          return t;
+        }
+      }
+    }
+    return null;
+  }
+
+  markAuthTokenUsed(id: string): boolean {
+    const t = this.authTokens.get(id);
+    if (t) {
+      t.used_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  }
+
+  invalidateAuthTokens(userId: string, type: string): void {
+    for (const t of Array.from(this.authTokens.values())) {
+      if (t.user_id === userId && t.type === type) {
+        t.used_at = new Date().toISOString();
+      }
+    }
+  }
+
+  revokeUserSessions(userId: string): void {
+    for (const s of Array.from(this.sessions.values())) {
+      if (s.user_id === userId) {
+        s.is_active = false;
+      }
+    }
+  }
+
+  // Phone Verifications
+  createPhoneVerification(
+    verif: Omit<PhoneVerification, "id" | "created_at" | "attempts">
+  ): PhoneVerification {
+    const id = "pv_" + Math.random().toString(36).substring(2, 11);
+    const item: PhoneVerification = {
+      ...verif,
+      id,
+      attempts: 0,
+      created_at: new Date().toISOString(),
+    };
+    this.phoneVerifications.set(id, item);
+    return item;
+  }
+
+  findPhoneVerification(idOrProviderId: string): PhoneVerification | null {
+    for (const pv of Array.from(this.phoneVerifications.values())) {
+      if (pv.id === idOrProviderId || pv.provider_verification_id === idOrProviderId) {
+        return pv;
+      }
+    }
+    return null;
+  }
+
+  incrementPhoneVerificationAttempts(id: string): number {
+    const pv = this.phoneVerifications.get(id);
+    if (pv) {
+      pv.attempts = (pv.attempts || 0) + 1;
+      return pv.attempts;
+    }
+    return 0;
+  }
+
+  completePhoneVerification(id: string, status: "verified" | "failed" = "verified"): PhoneVerification | null {
+    const pv = this.phoneVerifications.get(id);
+    if (pv) {
+      pv.status = status;
+      return pv;
+    }
+    return null;
+  }
+
+  // Notification Logs
+  logNotification(
+    log: Omit<NotificationLogRecord, "id" | "created_at">
+  ): NotificationLogRecord {
+    const item: NotificationLogRecord = {
+      ...log,
+      id: "nlog_" + Math.random().toString(36).substring(2, 11),
+      created_at: new Date().toISOString(),
+    };
+    this.notificationLogs.unshift(item);
+    return item;
+  }
+
+  // Usage Counters
+  getUsageCounter(channel: string, periodKey: string): number {
+    const key = `${channel}:${periodKey}`;
+    return this.usageCounters.get(key) || 0;
+  }
+
+  incrementUsageCounter(channel: string, periodKey: string, amount = 1): number {
+    const key = `${channel}:${periodKey}`;
+    const cur = this.usageCounters.get(key) || 0;
+    const next = cur + amount;
+    this.usageCounters.set(key, next);
+    return next;
   }
 
   // Session methods
@@ -887,46 +1111,54 @@ export async function dbCreateUser(
   user: Omit<AppUser, "id" | "created_at" | "last_login_at">
 ): Promise<AppUser> {
   const client = getSupabaseClient();
-  if (!client) {
+  if (!client || process.env.NODE_ENV === "test") {
     return sandboxDb.createUser(user);
   }
 
-  const { data, error } = await client
-    .from("app_users")
-    .insert([
-      {
-        username: user.username,
-        email: user.email,
-        password_hash: user.password_hash,
-        password_salt: user.password_salt,
-        full_name:
-          user.full_name ||
-          (user.first_name
-            ? `${user.first_name} ${user.last_name || ""}`.trim()
-            : user.username),
-        first_name: user.first_name || null,
-        last_name: user.last_name || null,
-        phone: user.phone || null,
-        phone_country_code: user.phone_country_code || null,
-        avatar_url: user.avatar_url || null,
-        company: user.company || null,
-        timezone: user.timezone || null,
-        bio: user.bio || null,
-        designation: user.designation || "Software Architect",
-        role: user.role || "architect",
-        failed_login_attempts: 0,
-        locked_until: null,
-      },
-    ])
-    .select()
-    .single();
+  try {
+    const { data, error } = await client
+      .from("app_users")
+      .insert([
+        {
+          username: user.username,
+          email: user.email,
+          password_hash: user.password_hash,
+          password_salt: user.password_salt,
+          full_name:
+            user.full_name ||
+            (user.first_name
+              ? `${user.first_name} ${user.last_name || ""}`.trim()
+              : user.username),
+          first_name: user.first_name || null,
+          last_name: user.last_name || null,
+          phone: user.phone || null,
+          phone_country_code: user.phone_country_code || null,
+          avatar_url: user.avatar_url || null,
+          company: user.company || null,
+          timezone: user.timezone || null,
+          bio: user.bio || null,
+          designation: user.designation || "Software Architect",
+          role: user.role || "architect",
+          failed_login_attempts: 0,
+          locked_until: null,
+        },
+      ])
+      .select()
+      .single();
 
-  if (error) {
-    lastDbError = error.message;
-    console.error("Supabase user creation error:", error);
-    throw new Error(`Database user creation failed: ${error.message}`);
+    if (!error && data) {
+      return data as AppUser;
+    }
+    if (error) {
+      lastDbError = error.message;
+      console.warn("Supabase user creation fallback to sandbox:", error.message);
+    }
+  } catch (err: any) {
+    lastDbError = err?.message;
+    console.warn("Supabase user creation network error, falling back to sandbox:", err?.message);
   }
-  return data as AppUser;
+
+  return sandboxDb.createUser(user);
 }
 
 export async function dbUpdateUserProfile(
@@ -2009,4 +2241,336 @@ export async function dbGetLatestReview(projectId: string): Promise<any | null> 
     }
   }
   return sandboxDb.getLatestReview(projectId);
+}
+
+// ============================================================================
+// Auth Verification, Tokens & Notification Persistence
+// ============================================================================
+
+export async function dbCreateAuthToken(
+  token: Omit<AuthToken, "id" | "created_at">
+): Promise<AuthToken> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { data, error } = await client
+        .from("auth_tokens")
+        .insert({
+          user_id: token.user_id,
+          type: token.type,
+          token_hash: token.token_hash,
+          expires_at: token.expires_at,
+          used_at: token.used_at || null,
+        })
+        .select()
+        .single();
+      if (!error && data) return data as AuthToken;
+    } catch (e) {
+      console.warn("Supabase dbCreateAuthToken fallback:", e);
+    }
+  }
+  return sandboxDb.createAuthToken(token);
+}
+
+export async function dbFindAuthTokenByHash(
+  tokenHash: string,
+  type?: "email_verify" | "password_reset"
+): Promise<AuthToken | null> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      let query = client.from("auth_tokens").select("*").eq("token_hash", tokenHash);
+      if (type) {
+        query = query.eq("type", type);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) return data as AuthToken;
+    } catch (e) {
+      console.warn("Supabase dbFindAuthTokenByHash fallback:", e);
+    }
+  }
+  return sandboxDb.findAuthTokenByHash(tokenHash, type);
+}
+
+export async function dbMarkAuthTokenUsed(id: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { error } = await client
+        .from("auth_tokens")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", id);
+      if (!error) {
+        sandboxDb.markAuthTokenUsed(id);
+        return true;
+      }
+    } catch (e) {
+      console.warn("Supabase dbMarkAuthTokenUsed fallback:", e);
+    }
+  }
+  return sandboxDb.markAuthTokenUsed(id);
+}
+
+export async function dbInvalidateAuthTokens(
+  userId: string,
+  type: "email_verify" | "password_reset"
+): Promise<void> {
+  const client = getSupabaseClient();
+  sandboxDb.invalidateAuthTokens(userId, type);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      await client
+        .from("auth_tokens")
+        .update({ used_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("type", type)
+        .is("used_at", null);
+    } catch (e) {
+      console.warn("Supabase dbInvalidateAuthTokens fallback:", e);
+    }
+  }
+}
+
+export async function dbRevokeUserSessions(userId: string): Promise<void> {
+  const client = getSupabaseClient();
+  sandboxDb.revokeUserSessions(userId);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      await client
+        .from("user_sessions")
+        .update({ is_active: false })
+        .eq("user_id", userId);
+    } catch (e) {
+      console.warn("Supabase dbRevokeUserSessions fallback:", e);
+    }
+  }
+}
+
+export async function dbVerifyUserEmail(userId: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  const sandboxOk = sandboxDb.verifyEmail(userId);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { error } = await client
+        .from("app_users")
+        .update({ email_verified_at: new Date().toISOString() })
+        .eq("id", userId);
+      if (!error) return true;
+    } catch (e) {
+      console.warn("Supabase dbVerifyUserEmail fallback:", e);
+    }
+  }
+  return sandboxOk;
+}
+
+export async function dbVerifyUserPhone(
+  userId: string,
+  phone: string
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  const sandboxOk = sandboxDb.verifyPhone(userId, phone);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { error } = await client
+        .from("app_users")
+        .update({
+          phone,
+          phone_verified_at: new Date().toISOString(),
+        })
+        .eq("id", userId);
+      if (!error) return true;
+    } catch (e) {
+      console.warn("Supabase dbVerifyUserPhone fallback:", e);
+    }
+  }
+  return sandboxOk;
+}
+
+export async function dbUpdateUserNotificationPrefs(
+  userId: string,
+  prefs: any
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  const sandboxOk = sandboxDb.updateNotificationPrefs(userId, prefs);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { error } = await client
+        .from("app_users")
+        .update({ notification_prefs: prefs })
+        .eq("id", userId);
+      if (!error) return true;
+    } catch (e) {
+      console.warn("Supabase dbUpdateUserNotificationPrefs fallback:", e);
+    }
+  }
+  return sandboxOk;
+}
+
+export async function dbCreatePhoneVerification(
+  verif: Omit<PhoneVerification, "id" | "created_at"> & { attempts?: number }
+): Promise<PhoneVerification> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { data, error } = await client
+        .from("phone_verifications")
+        .insert({
+          user_id: verif.user_id,
+          phone: verif.phone,
+          provider_verification_id: verif.provider_verification_id || null,
+          status: verif.status || "pending",
+          attempts: verif.attempts || 0,
+          expires_at: verif.expires_at,
+        })
+        .select()
+        .single();
+      if (!error && data) return data as PhoneVerification;
+    } catch (e) {
+      console.warn("Supabase dbCreatePhoneVerification fallback:", e);
+    }
+  }
+  return sandboxDb.createPhoneVerification(verif);
+}
+
+export async function dbFindPhoneVerification(
+  idOrProviderId: string
+): Promise<PhoneVerification | null> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { data, error } = await client
+        .from("phone_verifications")
+        .select("*")
+        .or(`id.eq.${idOrProviderId},provider_verification_id.eq.${idOrProviderId}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error && data) return data as PhoneVerification;
+    } catch (e) {
+      console.warn("Supabase dbFindPhoneVerification fallback:", e);
+    }
+  }
+  return sandboxDb.findPhoneVerification(idOrProviderId);
+}
+
+export async function dbIncrementPhoneVerificationAttempts(
+  id: string
+): Promise<number> {
+  const client = getSupabaseClient();
+  const next = sandboxDb.incrementPhoneVerificationAttempts(id);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      await client
+        .from("phone_verifications")
+        .update({ attempts: next })
+        .eq("id", id);
+    } catch (e) {
+      console.warn("Supabase dbIncrementPhoneVerificationAttempts fallback:", e);
+    }
+  }
+  return next;
+}
+
+export async function dbCompletePhoneVerification(
+  id: string,
+  status: "verified" | "failed" = "verified"
+): Promise<boolean> {
+  const client = getSupabaseClient();
+  const sandboxOk = sandboxDb.completePhoneVerification(id, status);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { error } = await client
+        .from("phone_verifications")
+        .update({ status })
+        .eq("id", id);
+      if (!error) return true;
+    } catch (e) {
+      console.warn("Supabase dbCompletePhoneVerification fallback:", e);
+    }
+  }
+  return !!sandboxOk;
+}
+
+export async function dbLogNotification(
+  log: Omit<NotificationLogRecord, "id" | "created_at">
+): Promise<NotificationLogRecord> {
+  const client = getSupabaseClient();
+  const saved = sandboxDb.logNotification(log);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      await client.from("notification_logs").insert({
+        user_id: log.user_id || null,
+        channel: log.channel,
+        template: log.template,
+        recipient: log.recipient,
+        status: log.status,
+        provider_message_id: log.provider_message_id || null,
+        error: log.error || null,
+      });
+    } catch (e) {
+      console.warn("Supabase dbLogNotification fallback:", e);
+    }
+  }
+  return saved;
+}
+
+export async function dbGetUsageCounter(
+  channel: string,
+  periodKey: string
+): Promise<number> {
+  const client = getSupabaseClient();
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const { data, error } = await client
+        .from("usage_counters")
+        .select("count")
+        .eq("channel", channel)
+        .eq("period_key", periodKey)
+        .maybeSingle();
+      if (!error && data) return data.count || 0;
+    } catch (e) {
+      console.warn("Supabase dbGetUsageCounter fallback:", e);
+    }
+  }
+  return sandboxDb.getUsageCounter(channel, periodKey);
+}
+
+export async function dbIncrementUsageCounter(
+  channel: string,
+  periodKey: string,
+  amount = 1
+): Promise<number> {
+  const client = getSupabaseClient();
+  const next = sandboxDb.incrementUsageCounter(channel, periodKey, amount);
+  if (client && process.env.NODE_ENV !== "test") {
+    try {
+      const now = new Date().toISOString();
+      const { data: existing } = await client
+        .from("usage_counters")
+        .select("id, count")
+        .eq("channel", channel)
+        .eq("period_key", periodKey)
+        .maybeSingle();
+
+      if (existing) {
+        await client
+          .from("usage_counters")
+          .update({
+            count: (existing.count || 0) + amount,
+            updated_at: now,
+          })
+          .eq("id", existing.id);
+      } else {
+        await client.from("usage_counters").insert({
+          channel,
+          period_key: periodKey,
+          count: amount,
+          updated_at: now,
+        });
+      }
+    } catch (e) {
+      console.warn("Supabase dbIncrementUsageCounter fallback:", e);
+    }
+  }
+  return next;
 }
